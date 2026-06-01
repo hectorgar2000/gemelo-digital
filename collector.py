@@ -137,7 +137,7 @@ def backfill(hours: int) -> None:
     # -- Energía — datos reales REE API pública -------------------------------
     try:
         log.info("[ENERGIA backfill] Descargando demanda real de REE API publica...")
-        energy_records = fetch_demand_real_range(start, end, chunk_days=30)
+        energy_records = fetch_demand_real_range(start, end, chunk_days=7)
         source = "ree_real"
 
         if not energy_records:
