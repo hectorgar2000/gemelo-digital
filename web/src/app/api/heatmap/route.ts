@@ -1,36 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { queryInflux, bucket } from '@/lib/influx'
+import { getSupabase } from '@/lib/supabase'
 
 export const revalidate = 3600
 
 export async function GET(req: NextRequest) {
-  const year = new URL(req.url).searchParams.get('year') ?? '2025'
+  const year = new URL(req.url).searchParams.get('year') ?? String(new Date().getFullYear() - 1)
+  const sb   = getSupabase()
 
-  // Devuelve media de demanda por (semana del año, hora del día)
-  // resultado: array de { week, hour, demand }
-  const flux = `
-    import "date"
-    import "math"
+  const { data } = await sb
+    .from('energy')
+    .select('ts,demand_mw')
+    .gte('ts', `${year}-01-01T00:00:00Z`)
+    .lte('ts', `${year}-12-31T23:59:59Z`)
+    .order('ts') as unknown as { data: { ts: string; demand_mw: number }[] | null }
 
-    from(bucket: "${bucket}")
-      |> range(start: ${year}-01-01T00:00:00Z, stop: ${year}-12-31T23:59:59Z)
-      |> filter(fn: (r) => r._measurement == "energy" and r._field == "demand_mw")
-      |> map(fn: (r) => ({
-          _value: r._value,
-          _time:  r._time,
-          hour:   date.hour(t: r._time),
-          week:   date.week(t: r._time),
-        }))
-      |> group(columns: ["week", "hour"])
-      |> mean()
-      |> group()
-  `
+  // Agrupar por semana ISO × hora del día
+  const acc: Record<string, { sum: number; n: number }> = {}
 
-  const rows = await queryInflux<{
-    week: number; hour: number; _value: number
-  }>(flux)
+  for (const r of data ?? []) {
+    const d    = new Date(r.ts)
+    const hour = d.getUTCHours()
 
-  return NextResponse.json(
-    rows.map(r => ({ week: r.week, hour: r.hour, demand: Math.round(r._value) }))
-  )
+    // Semana ISO aproximada (1-53)
+    const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    const week  = Math.ceil(((d.getTime() - start.getTime()) / 86400000 + start.getUTCDay() + 1) / 7)
+
+    const key = `${week}_${hour}`
+    if (!acc[key]) acc[key] = { sum: 0, n: 0 }
+    acc[key].sum += r.demand_mw
+    acc[key].n   += 1
+  }
+
+  const result = Object.entries(acc).map(([key, { sum, n }]) => {
+    const [w, h] = key.split('_').map(Number)
+    return { week: w, hour: h, demand: Math.round(sum / n) }
+  })
+
+  return NextResponse.json(result)
 }

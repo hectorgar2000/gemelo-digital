@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git rm *)",
+      "Bash(rmdir /s /q \"web\\\\.git\")",
+      "Bash(git add *)"
+    ]
+  }
+}

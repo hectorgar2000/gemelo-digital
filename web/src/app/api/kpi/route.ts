@@ -1,34 +1,29 @@
 import { NextResponse } from 'next/server'
-import { queryInflux, bucket } from '@/lib/influx'
+import { getSupabase, type WeatherRow, type EnergyRow } from '@/lib/supabase'
 
-export const revalidate = 60   // caché 60 s
+export const revalidate = 60
 
 export async function GET() {
-  const fields = [
-    { key: 'temperature_c',       measurement: 'weather' },
-    { key: 'humidity_pct',        measurement: 'weather' },
-    { key: 'wind_speed_kmh',      measurement: 'weather' },
-    { key: 'solar_radiation_wm2', measurement: 'weather' },
-    { key: 'demand_mw',           measurement: 'energy'  },
-  ]
+  const sb = getSupabase()
 
-  // La API REE publica puede tener un retraso de hasta 2h en los datos horarios,
-  // por eso usamos -6h para asegurar que siempre encontramos el último dato de demanda.
-  const flux = `
-    from(bucket: "${bucket}")
-      |> range(start: -6h)
-      |> filter(fn: (r) =>
-          (r._measurement == "weather" or r._measurement == "energy") and
-          (r._field == "temperature_c" or r._field == "humidity_pct" or
-           r._field == "wind_speed_kmh" or r._field == "solar_radiation_wm2" or
-           r._field == "demand_mw"))
-      |> group(columns: ["_field"])
-      |> last()
-  `
+  const [weather, energy] = await Promise.all([
+    sb.from('weather')
+      .select('temperature_c,humidity_pct,wind_speed_kmh,solar_radiation_wm2')
+      .order('ts', { ascending: false })
+      .limit(1)
+      .single() as unknown as Promise<{ data: WeatherRow | null }>,
+    sb.from('energy')
+      .select('demand_mw')
+      .order('ts', { ascending: false })
+      .limit(1)
+      .single() as unknown as Promise<{ data: EnergyRow | null }>,
+  ])
 
-  const rows = await queryInflux<{ _field: string; _value: number; _time: string }>(flux)
-  const kpi: Record<string, number> = {}
-  for (const r of rows) kpi[r._field] = r._value
-
-  return NextResponse.json(kpi)
+  return NextResponse.json({
+    temperature_c:       weather.data?.temperature_c       ?? null,
+    humidity_pct:        weather.data?.humidity_pct        ?? null,
+    wind_speed_kmh:      weather.data?.wind_speed_kmh      ?? null,
+    solar_radiation_wm2: weather.data?.solar_radiation_wm2 ?? null,
+    demand_mw:           energy.data?.demand_mw            ?? null,
+  })
 }

@@ -1,29 +1,26 @@
 import { NextResponse } from 'next/server'
-import { queryInflux, bucket } from '@/lib/influx'
+import { getSupabase, type ForecastRow } from '@/lib/supabase'
 
 export const revalidate = 300
 
 export async function GET() {
-  const flux = `
-    from(bucket: "${bucket}")
-      |> range(start: -4h, stop: 26h)
-      |> filter(fn: (r) => r._measurement == "forecast" and
-          (r._field == "demand_mw" or r._field == "demand_mw_upper" or r._field == "demand_mw_lower"))
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-  `
+  const sb    = getSupabase()
+  const since = new Date(Date.now() - 4 * 3600 * 1000).toISOString()
+  const until = new Date(Date.now() + 26 * 3600 * 1000).toISOString()
 
-  const rows = await queryInflux<{
-    _time: string
-    demand_mw?: number
-    demand_mw_upper?: number
-    demand_mw_lower?: number
-  }>(flux)
+  const { data } = await sb
+    .from('forecast')
+    .select('ts,demand_mw,demand_mw_upper,demand_mw_lower')
+    .gte('ts', since)
+    .lte('ts', until)
+    .order('ts') as unknown as { data: ForecastRow[] | null }
 
-  return NextResponse.json(rows.map(r => ({
-    time:  r._time,
-    pred:  r.demand_mw       ?? null,
-    upper: r.demand_mw_upper ?? null,
-    lower: r.demand_mw_lower ?? null,
-  })))
+  return NextResponse.json(
+    (data ?? []).map(r => ({
+      time:  r.ts,
+      pred:  r.demand_mw,
+      upper: r.demand_mw_upper,
+      lower: r.demand_mw_lower,
+    }))
+  )
 }
