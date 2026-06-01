@@ -1,0 +1,39 @@
+# Secretos — nunca al repositorio
+.env
+*.env
+secrets.yml
+
+# Modelo entrenado (reproducible, no necesita versionarse)
+prediction/prophet_model.pkl
+
+# Entorno virtual Python
+venv/
+.venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Logs del colector
+collector.log
+*.log
+
+# Caché Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Scripts temporales de corrección (ya no son necesarios en producción)
+fix_*.py
+add_anomaly_panel.py
+
+# Imágenes generadas por los notebooks
+analysis/*.png
+
+# Web app
+web/node_modules/
+web/.next/
+
+# Archivos de sistema Windows
+Thumbs.db
+desktop.ini

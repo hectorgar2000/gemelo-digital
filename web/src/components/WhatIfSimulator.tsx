@@ -1,0 +1,79 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import {
+  ResponsiveContainer, ComposedChart, Line, ReferenceLine,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts'
+
+type Curve = { temp: number; demand: number }
+
+export function WhatIfSimulator() {
+  const [curve,   setCurve]   = useState<Curve[]>([])
+  const [temp,    setTemp]    = useState(20)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/whatsif').then(r => r.json()).then(d => { setCurve(d); setLoading(false) })
+  }, [])
+
+  const predicted = curve.find(c => c.temp === Math.floor(temp / 2) * 2)?.demand ?? null
+
+  return (
+    <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">
+      <h2 className="text-white font-semibold text-lg mb-1">🎛️ Simulador What-If</h2>
+      <p className="text-gray-400 text-xs mb-5">¿Cuánta demanda esperar según la temperatura?</p>
+
+      {/* Slider */}
+      <div className="mb-6">
+        <div className="flex justify-between text-sm text-gray-400 mb-2">
+          <span>Temperatura</span>
+          <span className="text-white font-bold text-xl">{temp} °C</span>
+        </div>
+        <input
+          type="range" min={-4} max={44} value={temp}
+          onChange={e => setTemp(Number(e.target.value))}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gradient-to-r from-blue-500 via-green-400 to-red-500"
+        />
+        <div className="flex justify-between text-xs text-gray-600 mt-1">
+          <span>−4°C</span><span>20°C</span><span>44°C</span>
+        </div>
+      </div>
+
+      {/* Resultado */}
+      <div className="bg-gray-800 rounded-xl p-4 mb-5 text-center">
+        <div className="text-gray-400 text-sm mb-1">Demanda estimada a {temp}°C</div>
+        <div className="text-4xl font-bold text-blue-400">
+          {predicted !== null ? predicted.toLocaleString('es-ES') : '—'}
+          <span className="text-xl font-normal text-gray-400 ml-2">MW</span>
+        </div>
+        <div className="text-xs text-gray-500 mt-2">
+          {temp < 15 ? '❄️ Efecto calefacción eléctrica'
+            : temp > 28 ? '🥵 Efecto aire acondicionado'
+            : '✅ Zona de confort térmico — demanda mínima'}
+        </div>
+      </div>
+
+      {/* Curva U */}
+      {loading ? (
+        <div className="h-36 flex items-center justify-center text-gray-500">Cargando curva...</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={160}>
+          <ComposedChart data={curve} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="temp" stroke="#9CA3AF" tick={{ fontSize: 10 }} unit="°C" />
+            <YAxis stroke="#9CA3AF" tick={{ fontSize: 10 }}
+                   tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}
+              formatter={(v) => [`${Number(v).toLocaleString('es-ES')} MW`, 'Demanda media']}
+              labelFormatter={v => `${v}°C`}
+            />
+            <ReferenceLine x={Math.floor(temp / 2) * 2} stroke="#60A5FA" strokeDasharray="4 2" />
+            <Line dataKey="demand" stroke="#60A5FA" strokeWidth={2} dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
+}
