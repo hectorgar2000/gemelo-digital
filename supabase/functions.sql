@@ -49,13 +49,16 @@ $$ LANGUAGE SQL STABLE;
 
 
 -- 4. Series temporales: max temperatura y demanda por ventana de tiempo
+--    Usa epoch para el bucketing (correcto para cualquier intervalo, incluidos 3h, 12h, 1d)
 CREATE OR REPLACE FUNCTION get_series(p_hours INT, p_bucket_minutes INT)
 RETURNS TABLE(ts TIMESTAMPTZ, temperature FLOAT, demand FLOAT) AS $$
   WITH
     w AS (
       SELECT
-        DATE_TRUNC('minute', wt.ts)
-          - MAKE_INTERVAL(secs => (EXTRACT(MINUTE FROM wt.ts)::INT % p_bucket_minutes) * 60) AS bucket,
+        TO_TIMESTAMP(
+          FLOOR(EXTRACT(EPOCH FROM wt.ts) / (p_bucket_minutes * 60.0))
+          * (p_bucket_minutes * 60)
+        )::TIMESTAMPTZ AS bucket,
         MAX(wt.temperature_c) AS temperature
       FROM weather wt
       WHERE wt.ts >= NOW() - MAKE_INTERVAL(hours => p_hours)
@@ -63,8 +66,10 @@ RETURNS TABLE(ts TIMESTAMPTZ, temperature FLOAT, demand FLOAT) AS $$
     ),
     e AS (
       SELECT
-        DATE_TRUNC('minute', et.ts)
-          - MAKE_INTERVAL(secs => (EXTRACT(MINUTE FROM et.ts)::INT % p_bucket_minutes) * 60) AS bucket,
+        TO_TIMESTAMP(
+          FLOOR(EXTRACT(EPOCH FROM et.ts) / (p_bucket_minutes * 60.0))
+          * (p_bucket_minutes * 60)
+        )::TIMESTAMPTZ AS bucket,
         MAX(et.demand_mw) AS demand
       FROM energy et
       WHERE et.ts >= NOW() - MAKE_INTERVAL(hours => p_hours)

@@ -77,8 +77,7 @@ export default function Dashboard() {
         </div>
 
         <footer className="text-center text-gray-600 text-xs py-4 border-t border-gray-800">
-          Datos: Open-Meteo (clima ERA5) · Energía sintética correlacionada con temperatura ·
-          Modelo Prophet · InfluxDB 2.x
+          Datos: Open-Meteo ERA5 · REE API pública · Modelo Prophet · Supabase / PostgreSQL
         </footer>
       </main>
     </div>

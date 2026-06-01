@@ -1,0 +1,27 @@
+name: Recolección de datos (cada hora)
+
+on:
+  schedule:
+    - cron: '10 * * * *'   # cada hora a los :10 minutos
+  workflow_dispatch:        # ejecución manual desde GitHub Actions
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install --quiet httpx "supabase>=2" python-dotenv
+
+      - name: Recoger y guardar datos en Supabase
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python cloud_collector.py

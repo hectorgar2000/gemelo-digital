@@ -26,6 +26,18 @@ from ingestion.ree import (fetch_demand, fetch_demand_real_range,
                             fetch_demand_synthetic, generate_demand_from_weather_records)
 from ingestion.influx_writer import write_weather, write_energy, write_weather_batch, write_energy_batch
 
+# Supabase dual-write (opcional — no interrumpe si falla)
+try:
+    from ingestion.supabase_writer import (
+        write_weather      as sb_write_weather,
+        write_energy       as sb_write_energy,
+        write_weather_batch as sb_write_weather_batch,
+        write_energy_batch  as sb_write_energy_batch,
+    )
+    HAS_SUPABASE = True
+except Exception as _sb_err:
+    HAS_SUPABASE = False
+
 # --- Logging ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +62,11 @@ def collect_once() -> None:
     try:
         weather = fetch_current_weather()
         write_weather(weather)
+        if HAS_SUPABASE:
+            try:
+                sb_write_weather(weather)
+            except Exception as e:
+                log.warning(f"[CLIMA Supabase] {e}")
         log.info(
             f"[CLIMA]  T={weather['temperature_c']}C  "
             f"H={weather['humidity_pct']}%  "
@@ -69,6 +86,11 @@ def collect_once() -> None:
         if records:
             latest = records[-1]
             write_energy(latest, source=source)
+            if HAS_SUPABASE:
+                try:
+                    sb_write_energy(latest, source=source)
+                except Exception as e:
+                    log.warning(f"[ENERGIA Supabase] {e}")
             log.info(f"[ENERGIA] {latest['demand_mw']:.0f} MW  (fuente: {source})")
         else:
             log.warning("[ENERGIA] Sin datos en este ciclo")
@@ -102,6 +124,12 @@ def backfill(hours: int) -> None:
             end.strftime("%Y-%m-%d"),
         )
         write_weather_batch(weather_records)
+        if HAS_SUPABASE:
+            try:
+                sb_write_weather_batch(weather_records)
+                log.info(f"[CLIMA backfill Supabase] {len(weather_records)} registros escritos")
+            except Exception as e:
+                log.warning(f"[CLIMA backfill Supabase] {e}")
         log.info(f"[CLIMA backfill] {len(weather_records)} registros escritos")
     except Exception as e:
         log.error(f"[CLIMA backfill] Error: {e}")
@@ -121,6 +149,12 @@ def backfill(hours: int) -> None:
             source = "synthetic"
 
         write_energy_batch(energy_records, source=source)
+        if HAS_SUPABASE:
+            try:
+                sb_write_energy_batch(energy_records, source=source)
+                log.info(f"[ENERGIA backfill Supabase] {len(energy_records)} registros escritos")
+            except Exception as e:
+                log.warning(f"[ENERGIA backfill Supabase] {e}")
         log.info(f"[ENERGIA backfill] {len(energy_records)} registros escritos (fuente: {source})")
     except Exception as e:
         log.error(f"[ENERGIA backfill] Error: {e}")
