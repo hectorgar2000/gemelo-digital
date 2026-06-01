@@ -15,44 +15,23 @@ export async function GET(req: NextRequest) {
   const rangeKey  = searchParams.get('range')  || '-7d'
   const windowKey = searchParams.get('window') || '1h'
 
-  const hours   = RANGE_HOURS[rangeKey]   ?? 168
+  const hours   = RANGE_HOURS[rangeKey]    ?? 168
   const minutes = WINDOW_MINUTES[windowKey] ?? 60
 
-  const since = new Date(Date.now() - hours * 3600 * 1000).toISOString()
-  const sb    = getSupabase()
+  const sb = getSupabase()
 
-  const [wRows, eRows] = await Promise.all([
-    sb.from('weather').select('ts,temperature_c').gte('ts', since).order('ts').limit(10000) as unknown as Promise<{ data: { ts: string; temperature_c: number | null }[] | null }>,
-    sb.from('energy').select('ts,demand_mw').gte('ts', since).order('ts').limit(10000) as unknown as Promise<{ data: { ts: string; demand_mw: number }[] | null }>,
-  ])
+  const { data, error } = await (sb.rpc as Function)('get_series', {
+    p_hours:          hours,
+    p_bucket_minutes: minutes,
+  })
 
-  // Agregar en ventanas de `minutes`
-  function bucket(isoTs: string) {
-    const ms = Math.floor(new Date(isoTs).getTime() / (minutes * 60000)) * (minutes * 60000)
-    return new Date(ms).toISOString()
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const tempMap: Record<string, number[]> = {}
-  for (const r of wRows.data ?? []) {
-    const b = bucket(r.ts)
-    if (!tempMap[b]) tempMap[b] = []
-    if (r.temperature_c != null) tempMap[b].push(r.temperature_c)
-  }
-
-  const demandMap: Record<string, number[]> = {}
-  for (const r of eRows.data ?? []) {
-    const b = bucket(r.ts)
-    if (!demandMap[b]) demandMap[b] = []
-    if (r.demand_mw != null) demandMap[b].push(r.demand_mw)
-  }
-
-  const allBuckets = [...new Set([...Object.keys(tempMap), ...Object.keys(demandMap)])].sort()
-
-  const data = allBuckets.map(b => ({
-    time:        b,
-    temperature: tempMap[b]?.length   ? Math.max(...tempMap[b])   : null,
-    demand:      demandMap[b]?.length ? Math.max(...demandMap[b]) : null,
-  }))
-
-  return NextResponse.json(data)
+  return NextResponse.json(
+    (data as { ts: string; temperature: number | null; demand: number | null }[]).map(r => ({
+      time:        r.ts,
+      temperature: r.temperature,
+      demand:      r.demand,
+    }))
+  )
 }
