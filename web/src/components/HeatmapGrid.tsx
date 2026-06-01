@@ -10,7 +10,8 @@ const MONTH_WEEKS = [1, 5, 9, 14, 18, 22, 27, 31, 36, 40, 45, 49]
 
 function demandColor(demand: number, min: number, max: number) {
   if (!demand) return '#1F2937'
-  const t = (demand - min) / (max - min)
+  // Clamp t a [0,1] para evitar lightness negativa con escala p5-p95
+  const t = Math.max(0, Math.min(1, (demand - min) / (max - min)))
   if (t < 0.25) return `hsl(220, 80%, ${20 + t * 80}%)`
   if (t < 0.6)  return `hsl(${220 - (t - 0.25) * 400}, 80%, 50%)`
   return `hsl(${10 - (t - 0.6) * 20}, 90%, ${55 - (t - 0.6) * 20}%)`
