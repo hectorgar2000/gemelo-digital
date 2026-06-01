@@ -20,10 +20,10 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabase()
 
-  const { data, error } = await (sb.rpc('get_series', {
+  const { data, error } = await (sb.rpc as Function)('get_series', {
     p_hours:          hours,
     p_bucket_minutes: minutes,
-  }) as any).range(0, 19999)
+  }).range(0, 19999)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
