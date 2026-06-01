@@ -31,8 +31,10 @@ export function HeatmapGrid() {
   }, [year])
 
   const demands = cells.map(c => c.demand).filter(Boolean)
-  const min = demands.length ? Math.min(...demands) : 0
-  const max = demands.length ? Math.max(...demands) : 1
+  // Percentil p5-p95 para que picos puntuales de invierno/verano no desplacen toda la escala
+  const sorted  = [...demands].sort((a, b) => a - b)
+  const min = sorted[Math.floor(sorted.length * 0.05)] ?? 0
+  const max = sorted[Math.floor(sorted.length * 0.95)] ?? 1
 
   // Build lookup: grid[hour][week] = demand
   const grid: Record<number, Record<number, number>> = {}

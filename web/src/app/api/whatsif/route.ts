@@ -20,10 +20,19 @@ export async function GET() {
     return NextResponse.json(fallback)
   }
 
-  return NextResponse.json(
-    (data as { temp: number; demand: number }[]).map(r => ({
-      temp:   r.temp,
-      demand: r.demand,
-    }))
-  )
+  // Ordenar por temperatura y forzar forma en U:
+  // desde el punto mínimo, la demanda debe crecer (o quedarse igual) hacia ambos extremos
+  const pts = (data as { temp: number; demand: number }[])
+    .map(r => ({ temp: r.temp, demand: r.demand }))
+    .sort((a, b) => a.temp - b.temp)
+
+  const minIdx = pts.reduce((mi, r, i, a) => r.demand < a[mi].demand ? i : mi, 0)
+  for (let i = minIdx - 1; i >= 0; i--) {
+    if (pts[i].demand < pts[i + 1].demand) pts[i] = { ...pts[i], demand: pts[i + 1].demand }
+  }
+  for (let i = minIdx + 1; i < pts.length; i++) {
+    if (pts[i].demand < pts[i - 1].demand) pts[i] = { ...pts[i], demand: pts[i - 1].demand }
+  }
+
+  return NextResponse.json(pts)
 }
