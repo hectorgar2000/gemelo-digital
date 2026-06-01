@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const year = Number(new URL(req.url).searchParams.get('year') ?? new Date().getFullYear() - 1)
   const sb   = getSupabase()
 
-  const { data, error } = await (sb.rpc as Function)('get_heatmap', { p_year: year })
+  const { data, error } = await (sb.rpc('get_heatmap', { p_year: year }) as any).range(0, 1499)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
