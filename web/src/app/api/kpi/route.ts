@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase, type WeatherRow, type EnergyRow } from '@/lib/supabase'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const sb = getSupabase()

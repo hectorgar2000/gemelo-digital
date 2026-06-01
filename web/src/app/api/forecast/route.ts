@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase, type ForecastRow } from '@/lib/supabase'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const sb    = getSupabase()

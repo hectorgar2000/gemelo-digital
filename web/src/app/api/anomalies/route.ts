@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 const RANGE_HOURS: Record<string, number> = {
   '-7d': 168, '-30d': 720, '-90d': 2160, '-365d': 8760,

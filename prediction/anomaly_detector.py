@@ -224,12 +224,33 @@ def save_anomalies(df: pd.DataFrame) -> None:
     bucket = os.getenv("INFLUX_BUCKET", "gemelo_digital")
     with _get_client() as client:
         write_api = client.write_api(write_options=SYNCHRONOUS)
-        # Escribir en lotes de 500
         for i in range(0, len(points), 500):
             write_api.write(bucket=bucket, record=points[i:i+500])
 
     anomalies = df["is_anomaly"].sum()
     log.info(f"{len(points)} puntos escritos en InfluxDB ({anomalies} anomalias marcadas)")
+
+    # --- Supabase cloud (solo registros no-normales para ahorrar espacio) ---
+    try:
+        from ingestion.supabase_writer import write_anomalies_batch
+        records = []
+        for ts, row in df.iterrows():
+            if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+                ts_str = ts.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")
+            else:
+                ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+            records.append({
+                "ts":            ts_str,
+                "residual_mw":   float(row.get("residual_mw", 0)),
+                "z_score":       float(row.get("z_score", 0)),
+                "iforest_score": float(row.get("iforest_score", 0)),
+                "is_anomaly":    int(row.get("is_anomaly", 0)),
+                "nivel":         row.get("nivel", "normal"),
+            })
+        write_anomalies_batch(records)
+        log.info(f"{len(records)} puntos escritos en Supabase (anomalies)")
+    except Exception as e:
+        log.warning(f"Supabase anomalies write falló (no critico): {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -130,7 +130,8 @@ def predict(model, hours: int = 24) -> pd.DataFrame:
 
 
 def save_forecast(forecast_df: pd.DataFrame) -> None:
-    """Escribe el forecast en InfluxDB como measurement 'forecast'."""
+    """Escribe el forecast en InfluxDB (local) y Supabase (cloud)."""
+    # --- InfluxDB local ---
     points = [
         Point("forecast")
         .tag("model", "prophet_v1")
@@ -145,6 +146,20 @@ def save_forecast(forecast_df: pd.DataFrame) -> None:
     with _get_client() as client:
         client.write_api(write_options=SYNCHRONOUS).write(bucket=bucket, record=points)
     log.info(f"{len(points)} puntos escritos en InfluxDB (measurement: forecast)")
+
+    # --- Supabase cloud ---
+    try:
+        from ingestion.supabase_writer import write_forecast_batch
+        records = [{
+            "ts":              row["ds"].isoformat() + "Z",
+            "demand_mw":       float(row["yhat"]),
+            "demand_mw_upper": float(row["yhat_upper"]),
+            "demand_mw_lower": float(row["yhat_lower"]),
+        } for _, row in forecast_df.iterrows()]
+        write_forecast_batch(records)
+        log.info(f"{len(records)} puntos escritos en Supabase (forecast)")
+    except Exception as e:
+        log.warning(f"Supabase forecast write falló (no crítico): {e}")
 
 
 def plot_forecast(forecast_df: pd.DataFrame, weather_df: pd.DataFrame) -> None:
