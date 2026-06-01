@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
     .select('ts,demand_mw')
     .gte('ts', `${year}-01-01T00:00:00Z`)
     .lte('ts', `${year}-12-31T23:59:59Z`)
-    .order('ts') as unknown as { data: { ts: string; demand_mw: number }[] | null }
+    .order('ts')
+    .limit(10000) as unknown as { data: { ts: string; demand_mw: number }[] | null }
 
   // Agrupar por semana ISO × hora del día
   const acc: Record<string, { sum: number; n: number }> = {}

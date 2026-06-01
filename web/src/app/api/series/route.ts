@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
   const sb    = getSupabase()
 
   const [wRows, eRows] = await Promise.all([
-    sb.from('weather').select('ts,temperature_c').gte('ts', since).order('ts') as unknown as Promise<{ data: { ts: string; temperature_c: number | null }[] | null }>,
-    sb.from('energy').select('ts,demand_mw').gte('ts', since).order('ts') as unknown as Promise<{ data: { ts: string; demand_mw: number }[] | null }>,
+    sb.from('weather').select('ts,temperature_c').gte('ts', since).order('ts').limit(10000) as unknown as Promise<{ data: { ts: string; temperature_c: number | null }[] | null }>,
+    sb.from('energy').select('ts,demand_mw').gte('ts', since).order('ts').limit(10000) as unknown as Promise<{ data: { ts: string; demand_mw: number }[] | null }>,
   ])
 
   // Agregar en ventanas de `minutes`

@@ -8,8 +8,8 @@ export async function GET() {
   const since = new Date(Date.now() - 3 * 365 * 24 * 3600 * 1000).toISOString()
 
   const [wRes, eRes] = await Promise.all([
-    sb.from('weather').select('ts,temperature_c').gte('ts', since).order('ts') as unknown as Promise<{ data: { ts: string; temperature_c: number | null }[] | null }>,
-    sb.from('energy').select('ts,demand_mw').gte('ts', since).order('ts') as unknown as Promise<{ data: { ts: string; demand_mw: number }[] | null }>,
+    sb.from('weather').select('ts,temperature_c').gte('ts', since).order('ts').limit(30000) as unknown as Promise<{ data: { ts: string; temperature_c: number | null }[] | null }>,
+    sb.from('energy').select('ts,demand_mw').gte('ts', since).order('ts').limit(30000) as unknown as Promise<{ data: { ts: string; demand_mw: number }[] | null }>,
   ])
 
   // Construir lookup ts→demand
