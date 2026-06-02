@@ -1,0 +1,36 @@
+name: Detección semanal de anomalías
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'    # cada lunes a las 06:00 UTC (08:00 hora española)
+  workflow_dispatch:        # ejecución manual desde GitHub Actions
+
+jobs:
+  anomaly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: |
+          pip install --quiet \
+            httpx \
+            "supabase>=2" \
+            python-dotenv \
+            pandas \
+            numpy \
+            prophet \
+            pystan \
+            scikit-learn
+
+      - name: Detectar anomalías y guardar en Supabase
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python cloud_anomaly.py --hours 336   # últimas 2 semanas
