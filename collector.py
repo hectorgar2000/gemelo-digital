@@ -77,21 +77,23 @@ def collect_once() -> None:
         log.error(f"[CLIMA] Error: {e}")
 
     # -- Energía — API pública REE (sin token) --------------------------------
+    # Ventana de 3h + batch write: si hay fallo puntual en una ejecución
+    # la siguiente recupera los puntos del overlap. Upsert evita duplicados.
     try:
-        records = fetch_demand(hours_back=2)   # últimas 2h para asegurar al menos 1 punto
+        records = fetch_demand(hours_back=3)
         source  = "ree_real" if records else "synthetic"
         if not records:
-            records = fetch_demand_synthetic(hours_back=1)
+            records = fetch_demand_synthetic(hours_back=3)
 
         if records:
             latest = records[-1]
-            write_energy(latest, source=source)
+            write_energy_batch(records, source=source)
             if HAS_SUPABASE:
                 try:
-                    sb_write_energy(latest, source=source)
+                    sb_write_energy_batch(records, source=source)
                 except Exception as e:
                     log.warning(f"[ENERGIA Supabase] {e}")
-            log.info(f"[ENERGIA] {latest['demand_mw']:.0f} MW  (fuente: {source})")
+            log.info(f"[ENERGIA] {latest['demand_mw']:.0f} MW  ({len(records)} pts, fuente: {source})")
         else:
             log.warning("[ENERGIA] Sin datos en este ciclo")
     except Exception as e:

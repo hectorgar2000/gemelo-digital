@@ -109,7 +109,8 @@ export function DemandChart() {
             <Tooltip content={<CustomTooltip range={range.range} />} />
             <Legend wrapperStyle={{ color: '#D1D5DB', fontSize: 12 }} />
             <Area yAxisId="left" type="monotone" dataKey="demand" name="Demanda"
-                  stroke="#3B82F6" fill="#1D4ED8" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                  stroke="#3B82F6" fill="#1D4ED8" fillOpacity={0.15} strokeWidth={2} dot={false}
+                  connectNulls={true} />
             <Line yAxisId="right" type="monotone" dataKey="temperature" name="Temperatura"
                   stroke="#EF4444" strokeWidth={2} dot={false} />
           </ComposedChart>

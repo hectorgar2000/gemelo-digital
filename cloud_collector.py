@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from ingestion.openmeteo import fetch_current_weather
 from ingestion.ree import fetch_demand, fetch_demand_synthetic
-from ingestion.supabase_writer import write_weather, write_energy
+from ingestion.supabase_writer import write_weather, write_energy_batch
 
 
 def main() -> None:
@@ -39,17 +39,24 @@ def main() -> None:
         print(f"[CLIMA] Error: {e}", file=sys.stderr)
 
     # -- Energía ----------------------------------------------------------------
+    # Ventana de 3h para garantizar overlap con la ejecución anterior.
+    # Se guardan TODOS los registros (no solo el último) para que si una
+    # ejecución falla, la siguiente recupere el punto perdido con su overlap.
+    # El upsert por 'ts' evita duplicados.
     try:
-        records = fetch_demand(hours_back=2)
+        records = fetch_demand(hours_back=3)
         source = "ree_real"
         if not records:
-            records = fetch_demand_synthetic(hours_back=1)
+            records = fetch_demand_synthetic(hours_back=3)
             source = "synthetic"
 
         if records:
+            write_energy_batch(records, source=source)
             latest = records[-1]
-            write_energy(latest, source=source)
-            print(f"[ENERGIA] {latest['demand_mw']:.0f} MW  (fuente: {source})  OK")
+            print(
+                f"[ENERGIA] {latest['demand_mw']:.0f} MW  "
+                f"({len(records)} puntos guardados, fuente: {source})  OK"
+            )
         else:
             print("[ENERGIA] Sin datos en este ciclo")
     except Exception as e:
