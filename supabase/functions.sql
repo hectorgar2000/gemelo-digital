@@ -4,7 +4,14 @@
 -- ============================================================
 
 -- 1. Heatmap: demanda media por (semana, hora) para un año
-CREATE OR REPLACE FUNCTION get_heatmap(p_year INT)
+--    p_week_start / p_week_end permiten partir la consulta en dos mitades
+--    (1-26 y 27-53) para que cada llamada devuelva < 1000 filas y no choque
+--    con el límite max_rows de PostgREST (supabase-js no pagina RPC POST).
+CREATE OR REPLACE FUNCTION get_heatmap(
+  p_year       INT,
+  p_week_start INT DEFAULT 1,
+  p_week_end   INT DEFAULT 53
+)
 RETURNS TABLE(week INT, hour INT, demand FLOAT) AS $$
   SELECT
     EXTRACT(WEEK  FROM ts AT TIME ZONE 'UTC')::INT AS week,
@@ -13,6 +20,8 @@ RETURNS TABLE(week INT, hour INT, demand FLOAT) AS $$
   FROM energy
   WHERE ts >= make_timestamptz(p_year, 1, 1, 0, 0, 0, 'UTC')
     AND ts <  make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'UTC')
+    AND EXTRACT(WEEK FROM ts AT TIME ZONE 'UTC')::INT
+        BETWEEN p_week_start AND p_week_end
   GROUP BY week, hour
   ORDER BY week, hour;
 $$ LANGUAGE SQL STABLE;

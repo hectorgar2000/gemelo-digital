@@ -7,11 +7,12 @@ export async function GET(req: NextRequest) {
   const year = Number(new URL(req.url).searchParams.get('year') ?? new Date().getFullYear() - 1)
   const sb   = getSupabase()
 
-  // PostgREST max_rows=1000 por defecto. Un año completo tiene 52x24=1248 filas.
-  // Paginamos en 2 requests paralelos para superar el límite sin tocar la config de Supabase.
+  // supabase-js llama al RPC via POST — la paginación por .range() no funciona
+  // en el cliente JS para llamadas POST a RPC (sí en Python). En su lugar
+  // dividimos por rango de semanas: cada mitad devuelve <= 648 filas (< 1000).
   const [r1, r2] = await Promise.all([
-    (sb.rpc as Function)('get_heatmap', { p_year: year }).range(0, 999),
-    (sb.rpc as Function)('get_heatmap', { p_year: year }).range(1000, 1499),
+    (sb.rpc as Function)('get_heatmap', { p_year: year, p_week_start: 1,  p_week_end: 26 }),
+    (sb.rpc as Function)('get_heatmap', { p_year: year, p_week_start: 27, p_week_end: 53 }),
   ])
 
   const error = r1.error ?? r2.error
