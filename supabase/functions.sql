@@ -48,11 +48,26 @@ RETURNS TABLE(temp FLOAT, demand FLOAT) AS $$
 $$ LANGUAGE SQL STABLE;
 
 
--- 4. Series temporales: max temperatura y demanda por ventana de tiempo
---    Usa epoch para el bucketing (correcto para cualquier intervalo, incluidos 3h, 12h, 1d)
+-- 4. Series temporales: rejilla temporal completa con temperatura y demanda
+--    Usa generate_series para generar TODOS los buckets del rango, aunque no
+--    haya datos en alguno. Los buckets sin datos devuelven NULL en lugar de
+--    omitir la fila, lo que permite connectNulls en el frontend.
 CREATE OR REPLACE FUNCTION get_series(p_hours INT, p_bucket_minutes INT)
 RETURNS TABLE(ts TIMESTAMPTZ, temperature FLOAT, demand FLOAT) AS $$
   WITH
+    -- Rejilla temporal completa: un bucket cada p_bucket_minutes desde NOW()-p_hours hasta NOW()
+    time_grid AS (
+      SELECT
+        TO_TIMESTAMP(
+          FLOOR(EXTRACT(EPOCH FROM g) / (p_bucket_minutes * 60.0))
+          * (p_bucket_minutes * 60)
+        )::TIMESTAMPTZ AS bucket
+      FROM generate_series(
+        NOW() - MAKE_INTERVAL(hours => p_hours),
+        NOW(),
+        (p_bucket_minutes::TEXT || ' minutes')::INTERVAL
+      ) AS g
+    ),
     w AS (
       SELECT
         TO_TIMESTAMP(
@@ -76,9 +91,11 @@ RETURNS TABLE(ts TIMESTAMPTZ, temperature FLOAT, demand FLOAT) AS $$
       GROUP BY bucket
     )
   SELECT
-    COALESCE(w.bucket, e.bucket) AS ts,
+    tg.bucket                   AS ts,
     w.temperature,
     e.demand
-  FROM w FULL OUTER JOIN e ON w.bucket = e.bucket
-  ORDER BY ts;
+  FROM time_grid tg
+  LEFT JOIN w ON w.bucket = tg.bucket
+  LEFT JOIN e ON e.bucket = tg.bucket
+  ORDER BY tg.bucket;
 $$ LANGUAGE SQL STABLE;
