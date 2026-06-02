@@ -8,7 +8,7 @@ on:
 jobs:
   forecast:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -18,15 +18,11 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: |
-          pip install --quiet \
-            httpx \
-            "supabase>=2" \
-            python-dotenv \
-            pandas \
-            numpy \
-            prophet \
-            pystan
+        # prophet se necesita para cargar el .pkl y ejecutar predict().
+        # pystan NO es necesario: es el backend antiguo (prophet>=1.0 usa cmdstanpy).
+        # cmdstan tampoco hace falta: predict() no llama a Stan, solo usa los
+        # parámetros ya ajustados que están serializados en prophet_model.pkl.
+        run: pip install --quiet httpx "supabase>=2" python-dotenv pandas numpy prophet
 
       - name: Generar predicción y guardar en Supabase
         env:

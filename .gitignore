@@ -3,8 +3,9 @@
 *.env
 secrets.yml
 
-# Modelo entrenado (reproducible, no necesita versionarse)
-prediction/prophet_model.pkl
+# Modelo entrenado — se versiona para que GitHub Actions pueda cargarlo sin reentrenar
+# (prediction/forecast.py --retrain actualiza el fichero; luego hacer git add + commit)
+# prediction/prophet_model.pkl
 
 # Entorno virtual Python
 venv/
