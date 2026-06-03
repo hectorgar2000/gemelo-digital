@@ -84,14 +84,20 @@ def fetch_recent_weather(hours_back: int = 6) -> list[dict]:
     response.raise_for_status()
     data = response.json()
 
+    now_utc = datetime.now(timezone.utc)
+
     records = []
     times = data["hourly"]["time"]
     for i, t in enumerate(times):
         temp = data["hourly"]["temperature_2m"][i]
-        if temp is None:             # Open-Meteo puede devolver null en la hora más reciente
+        if temp is None:
+            continue
+        ts_utc = datetime.fromisoformat(_madrid_str_to_utc(t).replace("Z", "+00:00"))
+        # Descartar timestamps futuros: solo datos observados, no pronóstico
+        if ts_utc > now_utc:
             continue
         records.append({
-            "timestamp":           _madrid_str_to_utc(t),
+            "timestamp":           ts_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "temperature_c":       temp,
             "humidity_pct":        data["hourly"]["relative_humidity_2m"][i],
             "wind_speed_kmh":      data["hourly"]["wind_speed_10m"][i],
