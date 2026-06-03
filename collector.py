@@ -29,14 +29,19 @@ from ingestion.influx_writer import write_weather, write_energy, write_weather_b
 # Supabase dual-write (opcional — no interrumpe si falla)
 try:
     from ingestion.supabase_writer import (
-        write_weather      as sb_write_weather,
-        write_energy       as sb_write_energy,
+        _get_client         as sb_get_client,
+        write_weather       as sb_write_weather,
+        write_energy        as sb_write_energy,
         write_weather_batch as sb_write_weather_batch,
         write_energy_batch  as sb_write_energy_batch,
     )
     HAS_SUPABASE = True
 except Exception as _sb_err:
     HAS_SUPABASE = False
+
+# Parametros de la estrategia watermark
+OVERLAP_HOURS  = 2   # horas extra sobre el gap real (cubre bordes y retrasos)
+MAX_HOURS_BACK = 48  # maximo a pedir en una sola ejecucion
 
 # --- Logging ----------------------------------------------------------------
 logging.basicConfig(
@@ -51,6 +56,28 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
+# --- Watermark --------------------------------------------------------------
+
+def _hours_to_fetch(table: str, fallback: int = MAX_HOURS_BACK) -> int:
+    """
+    Calcula cuantas horas pedir para no dejar ningun hueco en 'table'.
+
+    Si Supabase esta disponible, consulta el ultimo timestamp y devuelve
+    gap_real + OVERLAP_HOURS + 1. Si no, usa el fallback fijo.
+    """
+    if HAS_SUPABASE:
+        try:
+            client = sb_get_client()
+            res    = client.table(table).select('ts').order('ts', desc=True).limit(1).execute()
+            if res.data:
+                last_ts = datetime.fromisoformat(res.data[0]['ts'].replace('Z', '+00:00'))
+                gap_h   = (datetime.now(timezone.utc) - last_ts).total_seconds() / 3600
+                return min(int(gap_h) + OVERLAP_HOURS + 1, MAX_HOURS_BACK)
+        except Exception as e:
+            log.warning(f"[watermark] No se pudo leer '{table}' de Supabase: {e}")
+    return fallback
+
+
 # --- Tarea principal --------------------------------------------------------
 
 def collect_once() -> None:
@@ -59,11 +86,13 @@ def collect_once() -> None:
     log.info(f"=== Ciclo de recoleccion iniciado: {now_str} ===")
 
     # -- Clima ---------------------------------------------------------------
-    # Ventana de 6h: misma estrategia de overlap que la energía.
-    # fetch_recent_weather usa past_hours de Open-Meteo sin lag de archivo.
+    # Watermark: pide exactamente desde el ultimo dato hasta ahora + overlap.
+    # fetch_recent_weather usa past_hours de Open-Meteo (sin lag de archivo).
     # Upsert por 'ts' evita duplicados en InfluxDB y Supabase.
     try:
-        weather_records = fetch_recent_weather(hours_back=6)
+        hours_w = _hours_to_fetch('weather')
+        log.info(f"[CLIMA] Solicitando {hours_w}h (watermark + {OVERLAP_HOURS}h overlap)")
+        weather_records = fetch_recent_weather(hours_back=min(hours_w, 90))
         write_weather_batch(weather_records)
         if HAS_SUPABASE:
             try:
@@ -82,13 +111,14 @@ def collect_once() -> None:
         log.error(f"[CLIMA] Error: {e}")
 
     # -- Energía — API pública REE (sin token) --------------------------------
-    # Ventana de 6h + batch write: si hay fallo puntual en una ejecución
-    # la siguiente recupera los puntos del overlap. Upsert evita duplicados.
+    # Watermark: misma logica. Upsert evita duplicados.
     try:
-        records = fetch_demand(hours_back=6)
+        hours_e = _hours_to_fetch('energy')
+        log.info(f"[ENERGIA] Solicitando {hours_e}h (watermark + {OVERLAP_HOURS}h overlap)")
+        records = fetch_demand(hours_back=hours_e)
         source  = "ree_real" if records else "synthetic"
         if not records:
-            records = fetch_demand_synthetic(hours_back=3)
+            records = fetch_demand_synthetic(hours_back=hours_e)
 
         if records:
             latest = records[-1]
