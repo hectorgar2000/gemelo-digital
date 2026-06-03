@@ -7,7 +7,7 @@ const RANGE_HOURS: Record<string, number> = {
   '-24h': 24, '-48h': 48, '-7d': 168, '-30d': 720, '-365d': 8760,
 }
 const WINDOW_MINUTES: Record<string, number> = {
-  '30m': 30, '3h': 180, '12h': 720, '1d': 1440,
+  '30m': 30, '1h': 60, '3h': 180, '12h': 720, '1d': 1440,
 }
 
 export async function GET(req: NextRequest) {

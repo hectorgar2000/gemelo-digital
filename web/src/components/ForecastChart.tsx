@@ -26,12 +26,29 @@ export function ForecastChart() {
     })
   }, [])
 
-  // Mezclar real + forecast en un único array por tiempo
+  // Mezclar real + forecast en un único array por tiempo.
+  // La API forecast empieza 4h atrás, solapando con la ventana real.
+  // Usar un Map keyed por timestamp evita duplicados: si un instante
+  // tiene ambos, se fusionan en un solo punto (real + pred en el mismo objeto).
   const now = new Date().toISOString()
-  const merged = [
-    ...real.map((r: DPoint) => ({ time: r.time, real: r.demand, pred: null, upper: null, lower: null })),
-    ...forecast.map((f: FPoint) => ({ time: f.time, real: null, pred: f.pred, upper: f.upper, lower: f.lower })),
-  ].sort((a, b) => a.time.localeCompare(b.time))
+  type MPoint = { time: string; real: number | null; pred: number | null; upper: number | null; lower: number | null }
+  const mergeMap = new Map<string, MPoint>()
+
+  real.forEach((r: DPoint) => {
+    mergeMap.set(r.time, { time: r.time, real: r.demand, pred: null, upper: null, lower: null })
+  })
+  forecast.forEach((f: FPoint) => {
+    const existing = mergeMap.get(f.time)
+    if (existing) {
+      existing.pred  = f.pred
+      existing.upper = f.upper
+      existing.lower = f.lower
+    } else {
+      mergeMap.set(f.time, { time: f.time, real: null, pred: f.pred, upper: f.upper, lower: f.lower })
+    }
+  })
+
+  const merged = Array.from(mergeMap.values()).sort((a, b) => a.time.localeCompare(b.time))
 
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">
@@ -69,7 +86,7 @@ export function ForecastChart() {
             <Legend wrapperStyle={{ color: '#D1D5DB', fontSize: 12 }} />
             <ReferenceLine x={now} stroke="#F59E0B" strokeDasharray="4 2"
                            label={{ value: 'Ahora', fill: '#F59E0B', fontSize: 11 }} />
-            <Line dataKey="real" name="Real" stroke="#60A5FA" strokeWidth={2} dot={false} connectNulls={false} />
+            <Line dataKey="real" name="Real" stroke="#60A5FA" strokeWidth={2} dot={false} connectNulls={true} />
             <Area dataKey="upper" name="IC superior" stroke="transparent" fill="#F97316" fillOpacity={0.15} dot={false} />
             <Area dataKey="lower" name="IC inferior" stroke="transparent" fill="#1F2937" fillOpacity={1} dot={false} />
             <Line dataKey="pred" name="Predicción" stroke="#F97316" strokeWidth={2}
