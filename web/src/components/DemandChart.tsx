@@ -112,7 +112,7 @@ export function DemandChart() {
                   stroke="#3B82F6" fill="#1D4ED8" fillOpacity={0.15} strokeWidth={2} dot={false}
                   connectNulls={true} />
             <Line yAxisId="right" type="monotone" dataKey="temperature" name="Temperatura"
-                  stroke="#EF4444" strokeWidth={2} dot={false} />
+                  stroke="#EF4444" strokeWidth={2} dot={false} connectNulls={true} />
           </ComposedChart>
         </ResponsiveContainer>
       )}
