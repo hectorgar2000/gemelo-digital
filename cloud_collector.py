@@ -17,9 +17,9 @@ load_dotenv()
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ingestion.openmeteo import fetch_current_weather
+from ingestion.openmeteo import fetch_recent_weather
 from ingestion.ree import fetch_demand, fetch_demand_synthetic
-from ingestion.supabase_writer import write_weather, write_energy_batch
+from ingestion.supabase_writer import write_weather_batch, write_energy_batch
 
 
 def main() -> None:
@@ -27,24 +27,31 @@ def main() -> None:
     print(f"=== cloud_collector {now_str} ===")
 
     # -- Clima ------------------------------------------------------------------
+    # Ventana de 6h: si GitHub Actions se retrasa o falla, la siguiente
+    # ejecución recupera todos los puntos perdidos gracias al overlap.
+    # fetch_recent_weather usa el parámetro past_hours de Open-Meteo
+    # (sin el lag de 2-3 días del archivo histórico).
+    # El upsert por 'ts' evita duplicados.
     try:
-        weather = fetch_current_weather()
-        write_weather(weather)
+        weather_records = fetch_recent_weather(hours_back=6)
+        write_weather_batch(weather_records)
+        latest_w = weather_records[-1] if weather_records else {}
         print(
-            f"[CLIMA] T={weather['temperature_c']}C  "
-            f"H={weather['humidity_pct']}%  "
-            f"Sol={weather['solar_radiation_wm2']}W/m2  OK"
+            f"[CLIMA] T={latest_w.get('temperature_c')}C  "
+            f"H={latest_w.get('humidity_pct')}%  "
+            f"Sol={latest_w.get('solar_radiation_wm2')}W/m2  "
+            f"({len(weather_records)} puntos guardados)  OK"
         )
     except Exception as e:
         print(f"[CLIMA] Error: {e}", file=sys.stderr)
 
     # -- Energía ----------------------------------------------------------------
-    # Ventana de 3h para garantizar overlap con la ejecución anterior.
-    # Se guardan TODOS los registros (no solo el último) para que si una
-    # ejecución falla, la siguiente recupere el punto perdido con su overlap.
+    # Ventana de 6h para garantizar overlap robusto con la ejecución anterior.
+    # GitHub Actions puede retrasarse hasta 5h en el tier gratuito; con 6h
+    # de overlap nunca se pierde un punto aunque fallen dos ejecuciones seguidas.
     # El upsert por 'ts' evita duplicados.
     try:
-        records = fetch_demand(hours_back=3)
+        records = fetch_demand(hours_back=6)
         source = "ree_real"
         if not records:
             records = fetch_demand_synthetic(hours_back=3)

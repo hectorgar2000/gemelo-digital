@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 # Asegurar que el directorio raíz está en el path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ingestion.openmeteo import fetch_current_weather, fetch_historical_weather
+from ingestion.openmeteo import fetch_current_weather, fetch_recent_weather, fetch_historical_weather
 from ingestion.ree import (fetch_demand, fetch_demand_real_range,
                             fetch_demand_synthetic, generate_demand_from_weather_records)
 from ingestion.influx_writer import write_weather, write_energy, write_weather_batch, write_energy_batch
@@ -59,28 +59,33 @@ def collect_once() -> None:
     log.info(f"=== Ciclo de recoleccion iniciado: {now_str} ===")
 
     # -- Clima ---------------------------------------------------------------
+    # Ventana de 6h: misma estrategia de overlap que la energía.
+    # fetch_recent_weather usa past_hours de Open-Meteo sin lag de archivo.
+    # Upsert por 'ts' evita duplicados en InfluxDB y Supabase.
     try:
-        weather = fetch_current_weather()
-        write_weather(weather)
+        weather_records = fetch_recent_weather(hours_back=6)
+        write_weather_batch(weather_records)
         if HAS_SUPABASE:
             try:
-                sb_write_weather(weather)
+                sb_write_weather_batch(weather_records)
             except Exception as e:
                 log.warning(f"[CLIMA Supabase] {e}")
+        latest_w = weather_records[-1] if weather_records else {}
         log.info(
-            f"[CLIMA]  T={weather['temperature_c']}C  "
-            f"H={weather['humidity_pct']}%  "
-            f"Viento={weather['wind_speed_kmh']}km/h  "
-            f"Sol={weather['solar_radiation_wm2']}W/m2"
+            f"[CLIMA]  T={latest_w.get('temperature_c')}C  "
+            f"H={latest_w.get('humidity_pct')}%  "
+            f"Viento={latest_w.get('wind_speed_kmh')}km/h  "
+            f"Sol={latest_w.get('solar_radiation_wm2')}W/m2  "
+            f"({len(weather_records)} puntos)"
         )
     except Exception as e:
         log.error(f"[CLIMA] Error: {e}")
 
     # -- Energía — API pública REE (sin token) --------------------------------
-    # Ventana de 3h + batch write: si hay fallo puntual en una ejecución
+    # Ventana de 6h + batch write: si hay fallo puntual en una ejecución
     # la siguiente recupera los puntos del overlap. Upsert evita duplicados.
     try:
-        records = fetch_demand(hours_back=3)
+        records = fetch_demand(hours_back=6)
         source  = "ree_real" if records else "synthetic"
         if not records:
             records = fetch_demand_synthetic(hours_back=3)

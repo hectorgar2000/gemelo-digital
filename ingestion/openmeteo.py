@@ -59,6 +59,48 @@ def fetch_current_weather() -> dict:
     }
 
 
+def fetch_recent_weather(hours_back: int = 6) -> list[dict]:
+    """
+    Devuelve datos meteorológicos horarios de las últimas N horas.
+
+    Usa el parámetro `past_hours` de la API de previsión de Open-Meteo,
+    que incluye observaciones recientes sin el lag de 2-3 días del archivo
+    histórico. Máximo 92 horas hacia atrás.
+
+    Ideal para la ventana de overlap en GitHub Actions: si una ejecución se
+    retrasa o falla, la siguiente recupera todos los puntos del período
+    solapado con un upsert idempotente.
+    """
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude":     LATITUDE,
+        "longitude":    LONGITUDE,
+        "hourly":       ",".join(HOURLY_VARS),
+        "past_hours":   hours_back,
+        "forecast_days": 0,          # solo historial, sin pronóstico futuro
+        "timezone":     "Europe/Madrid",
+    }
+    response = httpx.get(url, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+
+    records = []
+    times = data["hourly"]["time"]
+    for i, t in enumerate(times):
+        temp = data["hourly"]["temperature_2m"][i]
+        if temp is None:             # Open-Meteo puede devolver null en la hora más reciente
+            continue
+        records.append({
+            "timestamp":           _madrid_str_to_utc(t),
+            "temperature_c":       temp,
+            "humidity_pct":        data["hourly"]["relative_humidity_2m"][i],
+            "wind_speed_kmh":      data["hourly"]["wind_speed_10m"][i],
+            "cloud_cover_pct":     data["hourly"]["cloud_cover"][i],
+            "solar_radiation_wm2": data["hourly"]["shortwave_radiation"][i],
+        })
+    return records
+
+
 def fetch_historical_weather(start_date: str, end_date: str) -> list[dict]:
     """Devuelve datos horarios históricos entre start_date y end_date (YYYY-MM-DD)."""
     url = "https://archive-api.open-meteo.com/v1/archive"
