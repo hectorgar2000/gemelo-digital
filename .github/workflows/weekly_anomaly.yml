@@ -18,6 +18,9 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
+        # prophet>=1.0 usa cmdstanpy, NO pystan (backend obsoleto).
+        # predict() no llama a Stan — solo deserializa parámetros del .pkl.
+        # scikit-learn es necesario para IsolationForest.
         run: |
           pip install --quiet \
             httpx \
@@ -26,7 +29,6 @@ jobs:
             pandas \
             numpy \
             prophet \
-            pystan \
             scikit-learn
 
       - name: Detectar anomalías y guardar en Supabase
