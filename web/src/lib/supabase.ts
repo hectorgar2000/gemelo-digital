@@ -7,7 +7,17 @@ export type ForecastRow  = { ts: string; demand_mw: number | null; demand_mw_upp
 export type AnomalyRow   = { ts: string; residual_mw: number | null; z_score: number | null; iforest_score: number | null; is_anomaly: number; nivel: string }
 
 const url = process.env.SUPABASE_URL!
-const key = process.env.SUPABASE_SERVICE_KEY!
+
+// S1 (seguridad): usar la clave anon para las API routes (solo lectura, RLS habilitado).
+// La clave anon solo puede hacer SELECT (políticas en supabase/rls.sql).
+// Si SUPABASE_ANON_KEY no está configurada aún, cae al service key como fallback.
+//
+// Pasos para activar el modo seguro:
+//   1. Aplica supabase/rls.sql en el SQL Editor de Supabase
+//   2. Añade SUPABASE_ANON_KEY a web/.env.local y a las variables de Vercel
+//      (obtenla en Supabase → Project Settings → API → anon public)
+//   3. Una vez configurada, los scripts Python siguen usando SUPABASE_SERVICE_KEY
+const key = process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_KEY!
 
 let _client: ReturnType<typeof createClient> | null = null
 
