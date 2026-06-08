@@ -1,6 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+
+/** Etiqueta del efecto térmico según la temperatura seleccionada. */
+function thermalLabel(temp: number): string {
+  if (temp < 15) return '❄️ Efecto calefacción eléctrica'
+  if (temp > 28) return '🥵 Efecto aire acondicionado'
+  return '✅ Zona de confort térmico — demanda mínima'
+}
 import {
   ResponsiveContainer, ComposedChart, Line, ReferenceLine,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -88,9 +95,7 @@ export function WhatIfSimulator() {
               <span className="text-xl font-normal text-gray-400 ml-2">MW</span>
             </div>
             <div className="text-xs text-gray-500 mt-2">
-              {temp < 15 ? '❄️ Efecto calefacción eléctrica'
-                : temp > 28 ? '🥵 Efecto aire acondicionado'
-                : '✅ Zona de confort térmico — demanda mínima'}
+              {thermalLabel(temp)}
             </div>
           </div>
 

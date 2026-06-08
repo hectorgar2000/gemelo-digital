@@ -196,6 +196,39 @@ def fetch_demand_synthetic(hours_back: int = 24) -> list[dict]:
     return records
 
 
+def _parse_local_ts(ts_str: str, fallback_str: str) -> datetime:
+    """
+    Parsea un timestamp a hora local Madrid, con fallback a ahora.
+    Acepta ISO con o sin offset, con 'Z' o sin info de zona.
+    """
+    raw = (ts_str or fallback_str).replace("Z", "+00:00")
+    if "+" not in raw and len(raw) <= 16:
+        raw += "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+        # Si es UTC (offset=0) o naive, convertir a Madrid
+        if dt.tzinfo is None or dt.utcoffset().total_seconds() == 0:
+            dt = dt.replace(tzinfo=timezone.utc).astimezone(MADRID_TZ)
+        return dt
+    except Exception:
+        return datetime.now(timezone.utc).astimezone(MADRID_TZ)
+
+
+def _temp_effect(t: float) -> float:
+    """Efecto de la temperatura sobre la demanda base (curva en U)."""
+    if t < 18:  return (18 - t) ** 1.6 * 130
+    if t > 22:  return (t - 22) ** 1.8 * 90
+    return 0.0
+
+
+_HOUR_FACTOR: dict[int, float] = {
+    0: 0.72, 1: 0.69, 2: 0.67, 3: 0.66, 4: 0.66, 5: 0.68,
+    6: 0.73, 7: 0.82, 8: 0.93, 9: 1.02, 10: 1.08, 11: 1.10,
+    12: 1.07, 13: 1.02, 14: 0.97, 15: 0.94, 16: 0.95, 17: 0.98,
+    18: 1.03, 19: 1.09, 20: 1.12, 21: 1.08, 22: 0.98, 23: 0.85,
+}
+
+
 def generate_demand_from_weather_records(weather_records: list[dict]) -> list[dict]:
     """
     Genera demanda sintética correlacionada con temperatura real.
@@ -204,41 +237,16 @@ def generate_demand_from_weather_records(weather_records: list[dict]) -> list[di
     import math, random
     random.seed(42)
 
-    def temp_effect(t: float) -> float:
-        if t < 18:  return (18 - t) ** 1.6 * 130
-        elif t > 22: return (t - 22) ** 1.8 * 90
-        return 0.0
-
-    HOUR_FACTOR = {
-        0: 0.72, 1: 0.69, 2: 0.67, 3: 0.66, 4: 0.66, 5: 0.68,
-        6: 0.73, 7: 0.82, 8: 0.93, 9: 1.02, 10: 1.08, 11: 1.10,
-        12: 1.07, 13: 1.02, 14: 0.97, 15: 0.94, 16: 0.95, 17: 0.98,
-        18: 1.03, 19: 1.09, 20: 1.12, 21: 1.08, 22: 0.98, 23: 0.85,
-    }
-
     results = []
     for rec in weather_records:
-        ts_str = rec["timestamp"]
-        temp   = rec.get("temperature_c", 18.0)
-        ts_local_str = rec.get("timestamp_local", ts_str)
-        ts_local_clean = ts_local_str.replace("Z", "+00:00")
-        if "+" not in ts_local_clean and len(ts_local_clean) <= 16:
-            ts_local_clean += "+00:00"
-        try:
-            ts_local = datetime.fromisoformat(ts_local_clean)
-            if ts_local.tzinfo is not None and ts_local.utcoffset().total_seconds() == 0:
-                ts_local = ts_local.astimezone(MADRID_TZ)
-        except Exception:
-            ts_local = datetime.now(timezone.utc)
+        ts_str   = rec["timestamp"]
+        temp     = rec.get("temperature_c", 18.0)
+        ts_local = _parse_local_ts(rec.get("timestamp_local", ""), ts_str)
 
-        hour    = ts_local.hour
-        weekday = ts_local.weekday()
-        base       = 24_000
-        t_effect   = temp_effect(temp)
-        h_factor   = HOUR_FACTOR.get(hour, 1.0)
-        wd_factor  = 0.88 if weekday >= 5 else 1.0
-        noise      = random.gauss(0, 400)
-        demand     = max(16_000, (base + t_effect) * h_factor * wd_factor + noise)
+        hour      = ts_local.hour
+        weekday   = ts_local.weekday()
+        wd_factor = 0.88 if weekday >= 5 else 1.0
+        demand    = max(16_000, (24_000 + _temp_effect(temp)) * _HOUR_FACTOR.get(hour, 1.0) * wd_factor + random.gauss(0, 400))
         results.append({"timestamp": ts_str, "demand_mw": round(demand, 1)})
     return results
 

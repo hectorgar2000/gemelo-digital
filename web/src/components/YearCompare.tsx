@@ -44,9 +44,11 @@ export function YearCompare() {
   const chartData = Object.values(merged).sort((a, b) => a.week - b.week)
 
   function toggleYear(y: number) {
-    setSelected(prev =>
-      prev.includes(y) ? prev.filter(x => x !== y) : prev.length < 5 ? [...prev, y] : prev
-    )
+    setSelected(prev => {
+      if (prev.includes(y))   return prev.filter(x => x !== y)
+      if (prev.length >= 5)   return prev
+      return [...prev, y]
+    })
   }
 
   return (

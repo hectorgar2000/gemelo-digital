@@ -6,6 +6,12 @@ Los rangos están calibrados para la red eléctrica peninsular española y
 la climatología de Madrid.
 """
 
+from collections.abc import Callable
+
+# ---------------------------------------------------------------------------
+# Constantes de dominio
+# ---------------------------------------------------------------------------
+
 # Demanda eléctrica peninsular (MW)
 ENERGY_MIN_MW = 14_000   # mínimo histórico (madrugada de agosto, festivo)
 ENERGY_MAX_MW = 46_000   # máximo histórico (ola de calor + día laboral)
@@ -24,6 +30,57 @@ WIND_MAX_KMH = 250.0
 # Radiación solar (W/m²) — máximo físico a nivel del suelo
 RADIATION_MAX_WM2 = 1400.0
 
+# Campos opcionales meteorológicos: (clave, mínimo, máximo)
+_OPTIONAL_RANGES: list[tuple[str, float, float]] = [
+    ("humidity_pct",        HUMIDITY_MIN, HUMIDITY_MAX),
+    ("wind_speed_kmh",      0.0,          WIND_MAX_KMH),
+    ("solar_radiation_wm2", 0.0,          RADIATION_MAX_WM2),
+]
+
+
+# ---------------------------------------------------------------------------
+# Helpers internos
+# ---------------------------------------------------------------------------
+
+def _check_optional_range(record: dict, key: str, lo: float, hi: float) -> tuple[bool, str]:
+    """
+    Valida un campo numérico opcional en [lo, hi].
+    Si el campo es None o no es parseable (no crítico), devuelve (True, '').
+    """
+    val = record.get(key)
+    if val is None:
+        return True, ""
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return True, ""   # campo no crítico, no rechazar el registro
+    if not (lo <= v <= hi):
+        return False, f"{key}={v} fuera de [{lo}, {hi}]"
+    return True, ""
+
+
+def _filter_records(
+    records: list[dict],
+    validate_fn: Callable[[dict], tuple[bool, str]],
+) -> tuple[list[dict], list[str]]:
+    """
+    Aplica validate_fn a cada registro.
+    Devuelve (registros_válidos, lista_de_rechazos_con_razón).
+    """
+    valid: list[dict] = []
+    rejected: list[str] = []
+    for r in records:
+        ok, reason = validate_fn(r)
+        if ok:
+            valid.append(r)
+        else:
+            rejected.append(f"{r.get('timestamp', '?')} → {reason}")
+    return valid, rejected
+
+
+# ---------------------------------------------------------------------------
+# Validadores públicos
+# ---------------------------------------------------------------------------
 
 def validate_energy_record(record: dict) -> tuple[bool, str]:
     """
@@ -57,61 +114,23 @@ def validate_weather_record(record: dict) -> tuple[bool, str]:
     if not (TEMP_MIN_C <= t <= TEMP_MAX_C):
         return False, f"temperature_c={t:.1f} fuera de [{TEMP_MIN_C}, {TEMP_MAX_C}]"
 
-    humidity = record.get("humidity_pct")
-    if humidity is not None:
-        try:
-            h = float(humidity)
-            if not (HUMIDITY_MIN <= h <= HUMIDITY_MAX):
-                return False, f"humidity_pct={h:.1f} fuera de [0, 100]"
-        except (TypeError, ValueError):
-            pass  # No es crítico
-
-    wind = record.get("wind_speed_kmh")
-    if wind is not None:
-        try:
-            w = float(wind)
-            if w < 0 or w > WIND_MAX_KMH:
-                return False, f"wind_speed_kmh={w:.1f} fuera de [0, {WIND_MAX_KMH}]"
-        except (TypeError, ValueError):
-            pass
-
-    radiation = record.get("solar_radiation_wm2")
-    if radiation is not None:
-        try:
-            r = float(radiation)
-            if r < 0 or r > RADIATION_MAX_WM2:
-                return False, f"solar_radiation_wm2={r:.1f} fuera de [0, {RADIATION_MAX_WM2}]"
-        except (TypeError, ValueError):
-            pass
+    for key, lo, hi in _OPTIONAL_RANGES:
+        ok, reason = _check_optional_range(record, key, lo, hi)
+        if not ok:
+            return False, reason
 
     return True, ""
 
 
+# ---------------------------------------------------------------------------
+# Filtros públicos
+# ---------------------------------------------------------------------------
+
 def filter_energy(records: list[dict]) -> tuple[list[dict], list[str]]:
-    """
-    Filtra registros de energía inválidos.
-    Devuelve (registros_válidos, lista_de_rechazos_con_razón).
-    """
-    valid, rejected = [], []
-    for r in records:
-        ok, reason = validate_energy_record(r)
-        if ok:
-            valid.append(r)
-        else:
-            rejected.append(f"{r.get('timestamp', '?')} → {reason}")
-    return valid, rejected
+    """Filtra registros de energía inválidos."""
+    return _filter_records(records, validate_energy_record)
 
 
 def filter_weather(records: list[dict]) -> tuple[list[dict], list[str]]:
-    """
-    Filtra registros meteorológicos inválidos.
-    Devuelve (registros_válidos, lista_de_rechazos_con_razón).
-    """
-    valid, rejected = [], []
-    for r in records:
-        ok, reason = validate_weather_record(r)
-        if ok:
-            valid.append(r)
-        else:
-            rejected.append(f"{r.get('timestamp', '?')} → {reason}")
-    return valid, rejected
+    """Filtra registros meteorológicos inválidos."""
+    return _filter_records(records, validate_weather_record)
