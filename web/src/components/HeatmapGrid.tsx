@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { ChartSkeleton, ErrorState } from '@/components/ui'
 
 type Cell = { week: number; hour: number; demand: number }
 
@@ -20,16 +21,21 @@ function demandColor(demand: number, min: number, max: number) {
 export function HeatmapGrid() {
   const currentYear = new Date().getFullYear()
   const [year,   setYear]   = useState(currentYear - 1)
-  const [cells,  setCells]  = useState<Cell[]>([])
+  const [cells,   setCells]   = useState<Cell[]>([])
   const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(false)
   const [tooltip, setTooltip] = useState<{ week: number; hour: number; demand: number } | null>(null)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true)
+    setError(false)
     fetch(`/api/heatmap?year=${year}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(d => { setCells(d); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
   }, [year])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   const demands = cells.map(c => c.demand).filter(Boolean)
   // Percentil p5-p95 para que picos puntuales de invierno/verano no desplacen toda la escala
@@ -63,7 +69,9 @@ export function HeatmapGrid() {
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">Calculando heatmap...</div>
+        <ChartSkeleton height={300} />
+      ) : error ? (
+        <ErrorState onRetry={fetchData} />
       ) : (
         <div className="overflow-x-auto">
           {/* Meses en el eje X — posición absoluta por semana de inicio */}

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import { ChartSkeleton, ErrorState } from '@/components/ui'
 
 const COLORS = ['#60A5FA', '#F87171', '#34D399', '#FBBF24', '#A78BFA']
 
@@ -18,14 +19,19 @@ export function YearCompare() {
   const [selected, setSelected] = useState<number[]>([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR])
   const [data,     setData]     = useState<YearData>({})
   const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState(false)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!selected.length) return
     setLoading(true)
+    setError(false)
     fetch(`/api/compare?years=${selected.join(',')}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(d => { setData(d); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
   }, [selected])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   // Combinar en un array de {week, [year]: demand}
   const merged: Record<number, Record<string, number>> = {}
@@ -75,7 +81,9 @@ export function YearCompare() {
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">Cargando...</div>
+        <ChartSkeleton height={280} />
+      ) : error ? (
+        <ErrorState onRetry={fetchData} />
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>

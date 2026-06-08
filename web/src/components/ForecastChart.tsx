@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
+import { ChartSkeleton, ErrorState } from '@/components/ui'
 
 type FPoint = { time: string; pred: number | null; upper: number | null; lower: number | null }
 type DPoint = { time: string; demand: number | null }
@@ -14,17 +15,20 @@ export function ForecastChart() {
   const [forecast, setForecast] = useState<FPoint[]>([])
   const [real,     setReal]     = useState<DPoint[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(false)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
+    setLoading(true)
+    setError(false)
     Promise.all([
-      fetch('/api/forecast').then(r => r.json()),
-      fetch('/api/series?range=-48h&window=1h').then(r => r.json()),
-    ]).then(([fc, sr]) => {
-      setForecast(fc)
-      setReal(sr)
-      setLoading(false)
-    })
+      fetch('/api/forecast').then(r => { if (!r.ok) throw new Error(); return r.json() }),
+      fetch('/api/series?range=-48h&window=1h').then(r => { if (!r.ok) throw new Error(); return r.json() }),
+    ])
+      .then(([fc, sr]) => { setForecast(fc); setReal(sr); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
   }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   // "Ahora" actualizado cada minuto para que la línea de referencia no quede estática
   const [now, setNow] = useState(() => new Date().toISOString())
@@ -63,7 +67,7 @@ export function ForecastChart() {
           <h2 className="text-white font-semibold text-lg">🔮 Predicción Prophet — 24h</h2>
           <p className="text-gray-400 text-xs mt-1">Últimas 48h reales + próximas 24h estimadas</p>
         </div>
-        {forecast.length > 0 && (
+        {!loading && !error && forecast.length > 0 && (
           <div className="text-right">
             <div className="text-orange-400 font-bold text-xl">
               {Math.max(...forecast.filter(f => f.pred).map(f => f.pred!)).toLocaleString('es-ES', { maximumFractionDigits: 0 })} MW
@@ -74,7 +78,9 @@ export function ForecastChart() {
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">Cargando...</div>
+        <ChartSkeleton height={280} />
+      ) : error ? (
+        <ErrorState onRetry={fetchData} />
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart data={merged} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>

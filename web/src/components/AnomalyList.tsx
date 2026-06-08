@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { ErrorState, Skeleton } from '@/components/ui'
 
 type Anomaly = { time: string; nivel: string; zscore: number | null }
 
@@ -11,17 +12,32 @@ const NIVEL_CONFIG = {
   media: { bg: 'bg-orange-900/40', border: 'border-orange-500', dot: 'bg-orange-400', label: 'Media' },
 }
 
+function AnomalySkeleton() {
+  return (
+    <div className="space-y-2">
+      {[75, 60, 75, 55].map((w, i) => (
+        <Skeleton key={i} className="h-14" />
+      ))}
+    </div>
+  )
+}
+
 export function AnomalyList() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([])
   const [range,     setRange]     = useState('-30d')
   const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState(false)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true)
+    setError(false)
     fetch(`/api/anomalies?range=${range}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(d => { setAnomalies(d); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
   }, [range])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   const alta  = anomalies.filter(a => a.nivel === 'alta').length
   const media = anomalies.filter(a => a.nivel === 'media').length
@@ -31,12 +47,14 @@ export function AnomalyList() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-white font-semibold text-lg">🚨 Anomalías detectadas</h2>
-          <p className="text-gray-400 text-xs mt-1">
-            <span className="text-red-400 font-medium">{alta} alta</span>
-            {' · '}
-            <span className="text-orange-400 font-medium">{media} media</span>
-            {' confianza'}
-          </p>
+          {!loading && !error && (
+            <p className="text-gray-400 text-xs mt-1">
+              <span className="text-red-400 font-medium">{alta} alta</span>
+              {' · '}
+              <span className="text-orange-400 font-medium">{media} media</span>
+              {' confianza'}
+            </p>
+          )}
         </div>
         <select
           value={range}
@@ -51,7 +69,9 @@ export function AnomalyList() {
       </div>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500">Cargando...</div>
+        <AnomalySkeleton />
+      ) : error ? (
+        <ErrorState onRetry={fetchData} />
       ) : anomalies.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
           ✅ Sin anomalías en el período seleccionado

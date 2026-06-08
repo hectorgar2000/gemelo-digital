@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { ChartSkeleton, ErrorState } from '@/components/ui'
 
 const RANGES = [
-  { label: '24h',  range: '-24h',  window: '30m' },
-  { label: '7d',   range: '-7d',   window: '3h'  },
-  { label: '30d',  range: '-30d',  window: '12h' },
+  { label: '24h',   range: '-24h',  window: '30m' },
+  { label: '7d',    range: '-7d',   window: '3h'  },
+  { label: '30d',   range: '-30d',  window: '12h' },
   { label: '1 año', range: '-365d', window: '1d'  },
 ]
 
@@ -33,39 +34,38 @@ function CustomTooltip({
   range: string
 }) {
   if (!active || !payload?.length || !label) return null
-
   const demand = payload.find(p => p.dataKey === 'demand')?.value
   const temp   = payload.find(p => p.dataKey === 'temperature')?.value
-
   return (
     <div className="rounded-lg px-3 py-2 text-sm shadow-lg"
          style={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}>
       <p className="text-gray-300 font-medium mb-1">{fmtTime(label, range)}</p>
       {demand != null && (
-        <p className="text-blue-400">
-          ⚡ {Number(demand).toLocaleString('es-ES', { maximumFractionDigits: 0 })} MW
-        </p>
+        <p className="text-blue-400">⚡ {Number(demand).toLocaleString('es-ES', { maximumFractionDigits: 0 })} MW</p>
       )}
       {temp != null && (
-        <p className="text-red-400">
-          🌡️ {Number(temp).toFixed(1)} °C
-        </p>
+        <p className="text-red-400">🌡️ {Number(temp).toFixed(1)} °C</p>
       )}
     </div>
   )
 }
 
 export function DemandChart() {
-  const [range, setRange] = useState(RANGES[0])
-  const [data,  setData]  = useState<Point[]>([])
+  const [range,   setRange]   = useState(RANGES[0])
+  const [data,    setData]    = useState<Point[]>([])
   const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(false)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true)
+    setError(false)
     fetch(`/api/series?range=${range.range}&window=${range.window}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(d => { setData(d); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
   }, [range])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">
@@ -89,7 +89,9 @@ export function DemandChart() {
       </div>
 
       {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">Cargando...</div>
+        <ChartSkeleton height={300} />
+      ) : error ? (
+        <ErrorState onRetry={fetchData} />
       ) : (
         <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={data} margin={{ top: 5, right: 30, bottom: 5, left: 10 }}>
@@ -97,12 +99,12 @@ export function DemandChart() {
             <XAxis
               dataKey="time"
               tickFormatter={v => fmtTime(v, range.range)}
-              stroke="#9CA3AF"
-              tick={{ fontSize: 11 }}
+              stroke="#9CA3AF" tick={{ fontSize: 11 }}
               interval="preserveStartEnd"
             />
-            <YAxis yAxisId="left"  stroke="#60A5FA" tick={{ fontSize: 11 }}
-                   tickFormatter={v => `${(v/1000).toFixed(0)}k`} label={{ value: 'MW', angle: -90, position: 'insideLeft', fill: '#60A5FA', fontSize: 12 }} />
+            <YAxis yAxisId="left" stroke="#60A5FA" tick={{ fontSize: 11 }}
+                   tickFormatter={v => `${(v/1000).toFixed(0)}k`}
+                   label={{ value: 'MW', angle: -90, position: 'insideLeft', fill: '#60A5FA', fontSize: 12 }} />
             <YAxis yAxisId="right" orientation="right" stroke="#F87171"
                    tick={{ fontSize: 11 }} unit="°C"
                    label={{ value: '°C', angle: 90, position: 'insideRight', fill: '#F87171', fontSize: 12 }} />
