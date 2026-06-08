@@ -15,10 +15,10 @@ const NIVEL_CONFIG = {
 function AnomalySkeleton() {
   return (
     <div className="space-y-2">
-      {[75, 60, 75, 55].map((w, i) => (
+      {[0, 1, 2, 3].map(i => (
         <Skeleton key={i} className="h-14" />
       ))}
-    </div>
+</div>
   )
 }
 

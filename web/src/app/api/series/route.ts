@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 
-export const revalidate = 60
+// Lee searchParams → siempre dinámico; revalidate sería ignorado por Next.js
+export const dynamic = 'force-dynamic'
 
 const RANGE_HOURS: Record<string, number> = {
   '-24h': 24, '-48h': 48, '-7d': 168, '-30d': 720, '-365d': 8760,

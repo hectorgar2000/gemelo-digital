@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
@@ -8,8 +8,9 @@ import {
 import { format, parseISO } from 'date-fns'
 import { ChartSkeleton, ErrorState } from '@/components/ui'
 
-type FPoint = { time: string; pred: number | null; upper: number | null; lower: number | null }
-type DPoint = { time: string; demand: number | null }
+type FPoint  = { time: string; pred: number | null; upper: number | null; lower: number | null }
+type DPoint  = { time: string; demand: number | null }
+type MPoint  = { time: string; real: number | null; pred: number | null; upper: number | null; lower: number | null }
 
 export function ForecastChart() {
   const [forecast, setForecast] = useState<FPoint[]>([])
@@ -41,24 +42,24 @@ export function ForecastChart() {
   // La API forecast empieza 4h atrás, solapando con la ventana real.
   // Usar un Map keyed por timestamp evita duplicados: si un instante
   // tiene ambos, se fusionan en un solo punto (real + pred en el mismo objeto).
-  type MPoint = { time: string; real: number | null; pred: number | null; upper: number | null; lower: number | null }
-  const mergeMap = new Map<string, MPoint>()
-
-  real.forEach((r: DPoint) => {
-    mergeMap.set(r.time, { time: r.time, real: r.demand, pred: null, upper: null, lower: null })
-  })
-  forecast.forEach((f: FPoint) => {
-    const existing = mergeMap.get(f.time)
-    if (existing) {
-      existing.pred  = f.pred
-      existing.upper = f.upper
-      existing.lower = f.lower
-    } else {
-      mergeMap.set(f.time, { time: f.time, real: null, pred: f.pred, upper: f.upper, lower: f.lower })
-    }
-  })
-
-  const merged = Array.from(mergeMap.values()).sort((a, b) => a.time.localeCompare(b.time))
+  // useMemo: solo recalcular cuando cambian los datos, no en cada tick del timer.
+  const merged = useMemo(() => {
+    const map = new Map<string, MPoint>()
+    real.forEach((r: DPoint) => {
+      map.set(r.time, { time: r.time, real: r.demand, pred: null, upper: null, lower: null })
+    })
+    forecast.forEach((f: FPoint) => {
+      const existing = map.get(f.time)
+      if (existing) {
+        existing.pred  = f.pred
+        existing.upper = f.upper
+        existing.lower = f.lower
+      } else {
+        map.set(f.time, { time: f.time, real: null, pred: f.pred, upper: f.upper, lower: f.lower })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.time.localeCompare(b.time))
+  }, [real, forecast])
 
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">

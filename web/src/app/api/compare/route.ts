@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 
-export const revalidate = 3600
+// Lee searchParams → siempre dinámico; revalidate sería ignorado por Next.js
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const years = (new URL(req.url).searchParams.get('years') ?? '2024,2025')
