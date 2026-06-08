@@ -1,0 +1,28 @@
+name: Evaluación diaria del modelo
+
+on:
+  schedule:
+    - cron: '0 7 * * *'    # 07:00 UTC — después del forecast (05:30 UTC)
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install --quiet "supabase>=2" python-dotenv numpy
+
+      - name: Evaluar MAPE del forecast de ayer
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python cloud_model_eval.py --hours 24
+        # Sale con exit 1 si MAPE > 10% → notificación GitHub al propietario

@@ -1,0 +1,29 @@
+name: Monitor de ingesta
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'   # cada 3 horas
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install --quiet "supabase>=2" python-dotenv
+
+      - name: Verificar frescura de datos
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python monitor_ingesta.py --max-gap 3
+        # Si el script sale con exit 1, el job falla y GitHub envía
+        # una notificación por email al propietario del repositorio.

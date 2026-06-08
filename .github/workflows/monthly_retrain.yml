@@ -1,0 +1,58 @@
+name: Reentrenamiento mensual de Prophet
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'    # el día 1 de cada mes a las 03:00 UTC
+  workflow_dispatch:        # también se puede lanzar manualmente
+
+permissions:
+  contents: write           # necesario para hacer git push del nuevo .pkl
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45     # el entrenamiento con 12 meses tarda ~15-20 min
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # necesario para poder hacer push después
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Cachear CmdStan para no descargarlo en cada reentrenamiento (~300 MB)
+      - name: Cache CmdStan
+        uses: actions/cache@v4
+        with:
+          path: ~/.cmdstan
+          key: cmdstan-2.35.0
+
+      - name: Instalar dependencias
+        run: |
+          pip install --quiet \
+            "supabase>=2" \
+            python-dotenv \
+            pandas \
+            numpy \
+            prophet \
+            cmdstanpy
+
+      - name: Instalar CmdStan (necesario para fit())
+        run: python -c "import cmdstanpy; cmdstanpy.install_cmdstan()" 2>/dev/null || true
+
+      - name: Reentrenar modelo con los últimos 12 meses
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python cloud_retrain.py --months 12
+
+      - name: Commitear nuevo modelo al repositorio
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prediction/prophet_model.pkl
+          git diff --cached --stat
+          git commit -m "chore: retrain Prophet $(date -u +%Y-%m-%d)" || echo "Sin cambios en el modelo"
+          git push

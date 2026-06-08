@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from ingestion.openmeteo import fetch_recent_weather
 from ingestion.ree import fetch_demand, fetch_demand_synthetic
 from ingestion.supabase_writer import _get_client, write_weather_batch, write_energy_batch
+from ingestion.validators import filter_weather, filter_energy
 
 # Cuantas horas extra pedir por encima del gap real (cubre retrasos del borde)
 OVERLAP_HOURS = 2
@@ -69,6 +70,11 @@ def main() -> None:
         hours_w = _hours_to_fetch('weather')
         print(f"[CLIMA] Solicitando {hours_w}h (ultimo dato + {OVERLAP_HOURS}h overlap)")
         weather_records = fetch_recent_weather(hours_back=min(hours_w, 90))
+        weather_records, w_rejected = filter_weather(weather_records)
+        if w_rejected:
+            print(f"[CLIMA] Rechazados {len(w_rejected)} registros fuera de rango:", file=sys.stderr)
+            for r in w_rejected[:3]:
+                print(f"  {r}", file=sys.stderr)
         write_weather_batch(weather_records)
         latest_w = weather_records[-1] if weather_records else {}
         print(
@@ -93,6 +99,12 @@ def main() -> None:
             records = fetch_demand_synthetic(hours_back=hours_e)
             source  = "synthetic"
 
+        if records:
+            records, e_rejected = filter_energy(records)
+            if e_rejected:
+                print(f"[ENERGIA] Rechazados {len(e_rejected)} registros fuera de rango:", file=sys.stderr)
+                for r in e_rejected[:3]:
+                    print(f"  {r}", file=sys.stderr)
         if records:
             write_energy_batch(records, source=source)
             latest = records[-1]

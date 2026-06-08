@@ -17,9 +17,11 @@ export async function GET(req: NextRequest) {
 
   const hours   = RANGE_HOURS[rangeKey]    ?? 168
   const minutes = WINDOW_MINUTES[windowKey] ?? 60
+  const since   = new Date(Date.now() - hours * 3600 * 1000).toISOString()
 
   const sb = getSupabase()
 
+  // Serie temporal principal via función SQL
   const { data, error } = await (sb.rpc as Function)('get_series', {
     p_hours:          hours,
     p_bucket_minutes: minutes,
@@ -27,11 +29,27 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // F3: detectar si hay datos sintéticos en el rango (HEAD-only, sin body)
+  // source='synthetic' significa que la API REE no estaba disponible y se usó fallback
+  const { count: synthCount } = await sb
+    .from('energy')
+    .select('*', { count: 'exact', head: true })
+    .gte('ts', since)
+    .eq('source', 'synthetic') as { count: number | null }
+
+  const hasSynthetic = (synthCount ?? 0) > 0
+
   return NextResponse.json(
     (data as { ts: string; temperature: number | null; demand: number | null }[]).map(r => ({
       time:        r.ts,
       temperature: r.temperature,
       demand:      r.demand,
-    }))
+    })),
+    {
+      headers: {
+        // El cliente lee este header para mostrar el badge de advertencia
+        'X-Has-Synthetic': hasSynthetic ? '1' : '0',
+      },
+    }
   )
 }

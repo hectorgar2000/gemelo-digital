@@ -51,16 +51,21 @@ function CustomTooltip({
 }
 
 export function DemandChart() {
-  const [range,   setRange]   = useState(RANGES[0])
-  const [data,    setData]    = useState<Point[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(false)
+  const [range,        setRange]        = useState(RANGES[0])
+  const [data,         setData]         = useState<Point[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState(false)
+  const [hasSynthetic, setHasSynthetic] = useState(false)
 
   const fetchData = useCallback(() => {
     setLoading(true)
     setError(false)
     fetch(`/api/series?range=${range.range}&window=${range.window}`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then(r => {
+        if (!r.ok) throw new Error()
+        setHasSynthetic(r.headers.get('X-Has-Synthetic') === '1')
+        return r.json()
+      })
       .then(d => { setData(d); setLoading(false) })
       .catch(() => { setError(true); setLoading(false) })
   }, [range])
@@ -70,7 +75,15 @@ export function DemandChart() {
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-white font-semibold text-lg">⚡ Demanda y Temperatura</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-white font-semibold text-lg">⚡ Demanda y Temperatura</h2>
+          {hasSynthetic && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-700/50"
+                  title="Algunos datos de demanda son estimados porque la API de REE no estaba disponible">
+              ⚠ Estimado
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           {RANGES.map(r => (
             <button

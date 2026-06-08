@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(__file__))
 
 from ingestion.openmeteo import fetch_current_weather, fetch_recent_weather, fetch_historical_weather
+from ingestion.validators import filter_weather, filter_energy
 from ingestion.ree import (fetch_demand, fetch_demand_real_range,
                             fetch_demand_synthetic, generate_demand_from_weather_records)
 from ingestion.influx_writer import write_weather, write_energy, write_weather_batch, write_energy_batch
@@ -93,6 +94,9 @@ def collect_once() -> None:
         hours_w = _hours_to_fetch('weather')
         log.info(f"[CLIMA] Solicitando {hours_w}h (watermark + {OVERLAP_HOURS}h overlap)")
         weather_records = fetch_recent_weather(hours_back=min(hours_w, 90))
+        weather_records, w_rejected = filter_weather(weather_records)
+        if w_rejected:
+            log.warning(f"[CLIMA] Rechazados {len(w_rejected)} registros fuera de rango")
         write_weather_batch(weather_records)
         if HAS_SUPABASE:
             try:
@@ -120,6 +124,10 @@ def collect_once() -> None:
         if not records:
             records = fetch_demand_synthetic(hours_back=hours_e)
 
+        if records:
+            records, e_rejected = filter_energy(records)
+            if e_rejected:
+                log.warning(f"[ENERGIA] Rechazados {len(e_rejected)} registros fuera de rango")
         if records:
             latest = records[-1]
             write_energy_batch(records, source=source)
