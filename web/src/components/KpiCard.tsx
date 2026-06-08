@@ -17,7 +17,9 @@ export function KpiCard({ label, value, unit, icon, color, decimals = 1 }: KpiCa
         <span className="text-2xl">{icon}</span>
       </div>
       <div className="text-3xl font-bold">
-        {value !== null ? value.toFixed(decimals) : '—'}
+        {value !== null
+          ? value.toLocaleString('es-ES', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+          : '—'}
         <span className="text-lg font-normal ml-1 opacity-80">{unit}</span>
       </div>
     </div>

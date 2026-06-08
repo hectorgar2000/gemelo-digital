@@ -56,7 +56,7 @@ function CustomTooltip({
 }
 
 export function DemandChart() {
-  const [range, setRange] = useState(RANGES[1])
+  const [range, setRange] = useState(RANGES[0])
   const [data,  setData]  = useState<Point[]>([])
   const [loading, setLoading] = useState(true)
 

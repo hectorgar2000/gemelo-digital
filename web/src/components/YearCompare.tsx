@@ -7,12 +7,15 @@ import {
 } from 'recharts'
 
 const COLORS = ['#60A5FA', '#F87171', '#34D399', '#FBBF24', '#A78BFA']
-const ALL_YEARS = [2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026]
+
+// Años disponibles: desde 2016 hasta el año actual (se actualiza automáticamente)
+const CURRENT_YEAR = new Date().getFullYear()
+const ALL_YEARS = Array.from({ length: CURRENT_YEAR - 2015 }, (_, i) => 2016 + i)
 
 type YearData = Record<number, { week: number; demand: number }[]>
 
 export function YearCompare() {
-  const [selected, setSelected] = useState<number[]>([2023, 2024, 2025])
+  const [selected, setSelected] = useState<number[]>([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR])
   const [data,     setData]     = useState<YearData>({})
   const [loading,  setLoading]  = useState(false)
 

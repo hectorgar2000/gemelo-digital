@@ -2,7 +2,8 @@
 
 import { YearCompare } from '@/components/YearCompare'
 
-const RANGES = [
+// Rangos disponibles para exportar CSV
+const EXPORT_RANGES = [
   { label: '7 días',  value: '-7d'   },
   { label: '30 días', value: '-30d'  },
   { label: '1 año',   value: '-365d' },
@@ -21,7 +22,7 @@ export default function Comparar() {
         {/* Export CSV */}
         <div className="flex flex-col gap-2 items-end">
           <span className="text-gray-500 text-xs">Exportar datos</span>
-          {RANGES.map(r => (
+          {EXPORT_RANGES.map(r => (
             <a
               key={r.value}
               href={`/api/export?range=${r.value}`}

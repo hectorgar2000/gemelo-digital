@@ -17,7 +17,8 @@ export function WhatIfSimulator() {
     fetch('/api/whatsif').then(r => r.json()).then(d => { setCurve(d); setLoading(false) })
   }, [])
 
-  const predicted = curve.find(c => c.temp === Math.floor(temp / 2) * 2)?.demand ?? null
+  const bandTemp  = Math.floor(temp / 2) * 2          // la curva agrupa en bandas de 2°C
+  const predicted = curve.find(c => c.temp === bandTemp)?.demand ?? null
 
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">
@@ -42,7 +43,12 @@ export function WhatIfSimulator() {
 
       {/* Resultado */}
       <div className="bg-gray-800 rounded-xl p-4 mb-5 text-center">
-        <div className="text-gray-400 text-sm mb-1">Demanda estimada a {temp}°C</div>
+        <div className="text-gray-400 text-sm mb-1">
+          Demanda estimada a {temp}°C
+          {temp !== bandTemp && (
+            <span className="text-gray-600 ml-1">(banda {bandTemp}–{bandTemp + 2}°C)</span>
+          )}
+        </div>
         <div className="text-4xl font-bold text-blue-400">
           {predicted !== null ? predicted.toLocaleString('es-ES') : '—'}
           <span className="text-xl font-normal text-gray-400 ml-2">MW</span>
@@ -69,7 +75,7 @@ export function WhatIfSimulator() {
               formatter={(v) => [`${Number(v).toLocaleString('es-ES')} MW`, 'Demanda media']}
               labelFormatter={v => `${v}°C`}
             />
-            <ReferenceLine x={Math.floor(temp / 2) * 2} stroke="#60A5FA" strokeDasharray="4 2" />
+            <ReferenceLine x={bandTemp} stroke="#60A5FA" strokeDasharray="4 2" />
             <Line dataKey="demand" stroke="#60A5FA" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>

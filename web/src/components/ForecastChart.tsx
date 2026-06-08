@@ -26,11 +26,17 @@ export function ForecastChart() {
     })
   }, [])
 
+  // "Ahora" actualizado cada minuto para que la línea de referencia no quede estática
+  const [now, setNow] = useState(() => new Date().toISOString())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date().toISOString()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   // Mezclar real + forecast en un único array por tiempo.
   // La API forecast empieza 4h atrás, solapando con la ventana real.
   // Usar un Map keyed por timestamp evita duplicados: si un instante
   // tiene ambos, se fusionan en un solo punto (real + pred en el mismo objeto).
-  const now = new Date().toISOString()
   type MPoint = { time: string; real: number | null; pred: number | null; upper: number | null; lower: number | null }
   const mergeMap = new Map<string, MPoint>()
 

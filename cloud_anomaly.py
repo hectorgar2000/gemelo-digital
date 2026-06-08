@@ -24,6 +24,9 @@ from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
+
+MADRID_TZ = ZoneInfo("Europe/Madrid")
 
 load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
@@ -109,9 +112,12 @@ def load_data_from_supabase(hours: int = 168) -> pd.DataFrame:
     df = df_e.join(df_w, how="inner")
     df = df.dropna(subset=["demand_mw", "temperature_c"])
 
-    # Features para Isolation Forest
-    df["hour"]       = df.index.hour
-    df["is_weekend"] = df.index.dayofweek.isin([5, 6]).astype(int)
+    # Features para Isolation Forest — convertir a hora local Madrid
+    # (el índice es UTC; df.index.hour daría horas UTC, no las horas locales
+    #  que definen los patrones de demanda: 22:00 UTC = 00:00 Madrid en verano)
+    idx_madrid       = df.index.tz_convert(MADRID_TZ)
+    df["hour"]       = idx_madrid.hour
+    df["is_weekend"] = idx_madrid.dayofweek.isin([5, 6]).astype(int)
 
     log.info(
         f"Datos cargados desde Supabase: {len(df)} registros "
