@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install --quiet httpx "supabase>=2" python-dotenv
+        run: pip install --quiet httpx "supabase>=2,<3" python-dotenv
 
       - name: Recoger y guardar datos en Supabase
         env:

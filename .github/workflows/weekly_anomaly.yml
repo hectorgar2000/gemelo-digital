@@ -24,11 +24,11 @@ jobs:
         run: |
           pip install --quiet \
             httpx \
-            "supabase>=2" \
+            "supabase>=2,<3" \
             python-dotenv \
             pandas \
             numpy \
-            prophet \
+            "prophet==1.3.0" \
             scikit-learn
 
       - name: Detectar anomalías y guardar en Supabase

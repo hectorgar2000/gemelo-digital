@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install --quiet "supabase>=2" python-dotenv numpy
+        run: pip install --quiet "supabase>=2,<3" python-dotenv numpy
 
       - name: Evaluar MAPE del forecast de ayer
         env:

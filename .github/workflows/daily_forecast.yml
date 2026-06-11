@@ -22,7 +22,9 @@ jobs:
         # pystan NO es necesario: es el backend antiguo (prophet>=1.0 usa cmdstanpy).
         # cmdstan tampoco hace falta: predict() no llama a Stan, solo usa los
         # parámetros ya ajustados que están serializados en prophet_model.pkl.
-        run: pip install --quiet httpx "supabase>=2" python-dotenv pandas numpy prophet
+        # IMPORTANTE: pinear prophet a la misma versión con que se generó el pkl.
+        # Un cambio de versión incompatible puede corromper la deserialización.
+        run: pip install --quiet httpx "supabase>=2,<3" python-dotenv pandas numpy "prophet==1.3.0"
 
       - name: Generar predicción y guardar en Supabase
         env:

@@ -116,17 +116,27 @@ def main() -> None:
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"=== cloud_collector {now_str} ===")
 
+    weather_ok = True
+    energy_ok  = True
+
     try:
         _collect_weather()
     except Exception as e:
         print(f"[CLIMA] Error: {e}", file=sys.stderr)
+        weather_ok = False
 
     try:
         _collect_energy()
     except Exception as e:
         print(f"[ENERGIA] Error: {e}", file=sys.stderr)
+        energy_ok = False
 
     print("=== cloud_collector completado ===")
+
+    # Salir con error si algún stream falló — GitHub Actions notificará por email
+    # y el monitor de ingesta detectará el gap en la siguiente ejecución.
+    if not weather_ok or not energy_ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
