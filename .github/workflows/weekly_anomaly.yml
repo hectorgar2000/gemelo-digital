@@ -23,7 +23,6 @@ jobs:
         # scikit-learn es necesario para IsolationForest.
         run: |
           pip install --quiet \
-            httpx \
             "supabase>=2,<3" \
             python-dotenv \
             pandas \

@@ -60,4 +60,5 @@ jobs:
           git add prediction/prophet_model.pkl
           git diff --cached --stat
           git commit -m "chore: retrain Prophet $(date -u +%Y-%m-%d)" || echo "Sin cambios en el modelo"
+          git pull --rebase origin main
           git push
