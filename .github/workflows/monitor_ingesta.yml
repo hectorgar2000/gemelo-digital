@@ -24,6 +24,7 @@ jobs:
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python monitor_ingesta.py --max-gap 3
-        # Si el script sale con exit 1, el job falla y GitHub envía
-        # una notificación por email al propietario del repositorio.
+        run: python monitor_ingesta.py --max-gap 5
+        # Umbral 5h: el collector corre cada 1h pero GitHub Actions free tier
+        # puede retrasarse 1-3h, así que 5h evita falsos positivos.
+        # Si el script sale con exit 1, GitHub envía email de alerta al propietario.
