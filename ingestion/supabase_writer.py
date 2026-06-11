@@ -12,14 +12,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+_client = None
+
 def _get_client():
-    """Devuelve cliente Supabase autenticado con la service_role key."""
-    from supabase import create_client
-    url   = os.getenv("SUPABASE_URL")
-    key   = os.getenv("SUPABASE_SERVICE_KEY")
-    if not url or not key:
-        raise EnvironmentError("SUPABASE_URL y SUPABASE_SERVICE_KEY requeridos en .env")
-    return create_client(url, key)
+    """Devuelve cliente Supabase autenticado, reutilizando la instancia por proceso."""
+    global _client
+    if _client is None:
+        from supabase import create_client
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_KEY")
+        if not url or not key:
+            raise EnvironmentError("SUPABASE_URL y SUPABASE_SERVICE_KEY requeridos en .env")
+        _client = create_client(url, key)
+    return _client
 
 
 def _fmt_ts(ts) -> str:

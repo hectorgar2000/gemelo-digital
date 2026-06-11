@@ -91,8 +91,8 @@ def fetch_temperature_forecast(hours: int = 24) -> pd.DataFrame:
 # Generación de predicción
 # ---------------------------------------------------------------------------
 
-def predict(model, hours: int = 24) -> pd.DataFrame:
-    """Genera predicción para las próximas N horas."""
+def predict(model, hours: int = 24) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Genera predicción para las próximas N horas. Devuelve (forecast_df, futuro_df)."""
     futuro = fetch_temperature_forecast(hours)
     log.info("Generando prediccion Prophet...")
     fc = model.predict(futuro)

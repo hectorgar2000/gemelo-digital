@@ -104,13 +104,16 @@ def main():
     print(f"  Real disponible:     {len(real_map)} horas")
 
     if not fc_map or not real_map:
-        print("ERROR: datos insuficientes para evaluación (¿se ejecutó daily_forecast.yml?)")
-        sys.exit(1 if not args.no_fail else 0)
+        # Sin datos no es un fallo del modelo — puede ser el primer día tras el despliegue
+        # o que daily_forecast.yml aún no haya corrido. Salir con 0 para no generar
+        # falsa alarma por email.
+        print("INFO: datos insuficientes para evaluación (¿primer día tras deploy?). Sin alerta.")
+        sys.exit(0)
 
     m = compute_metrics(fc_map, real_map)
     if not m:
-        print("ERROR: no hay horas coincidentes entre forecast y real")
-        sys.exit(1 if not args.no_fail else 0)
+        print("INFO: no hay horas coincidentes entre forecast y real. Sin alerta.")
+        sys.exit(0)
 
     print(f"\n  Período:     {m['first_hour']} → {m['last_hour']}")
     print(f"  Horas eval:  {m['n_hours']}")
