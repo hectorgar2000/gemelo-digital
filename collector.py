@@ -119,7 +119,8 @@ def collect_once() -> None:
     try:
         hours_e = _hours_to_fetch('energy')
         log.info(f"[ENERGIA] Solicitando {hours_e}h (watermark + {OVERLAP_HOURS}h overlap)")
-        records = fetch_demand(hours_back=hours_e)
+        # allow_synthetic=False: si REE falla recibimos [] y etiquetamos bien la fuente
+        records = fetch_demand(hours_back=hours_e, allow_synthetic=False)
         source  = "ree_real" if records else "synthetic"
         if not records:
             records = fetch_demand_synthetic(hours_back=hours_e)

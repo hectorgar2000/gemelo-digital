@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -17,21 +18,14 @@ type YearData = Record<number, { week: number; demand: number }[]>
 
 export function YearCompare() {
   const [selected, setSelected] = useState<number[]>([CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR])
-  const [data,     setData]     = useState<YearData>({})
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState(false)
-
-  const fetchData = useCallback(() => {
-    if (!selected.length) return
-    setLoading(true)
-    setError(false)
-    fetch(`/api/compare?years=${selected.join(',')}`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [selected])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const yearsKey = selected.join(',')
+  const { data, loading, error, reload: fetchData } = useApi<YearData>(
+    yearsKey,
+    signal => yearsKey
+      ? fetchJson<YearData>(`/api/compare?years=${yearsKey}`, signal)
+      : Promise.resolve({}),
+    {},
+  )
 
   // Combinar en un array de {week, [year]: demand}
   const merged: Record<number, Record<string, number>> = {}
@@ -62,7 +56,7 @@ export function YearCompare() {
 
       {/* Selector de años */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {ALL_YEARS.map((y, i) => {
+        {ALL_YEARS.map(y => {
           const active = selected.includes(y)
           const color  = active ? COLORS[selected.indexOf(y)] : undefined
           return (

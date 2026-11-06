@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { callRpc } from '@/lib/supabase'
 
 export const revalidate = 3600
 
@@ -45,13 +45,12 @@ function enforceUShape(pts: Pt[]): Pt[] {
 // ---------------------------------------------------------------------------
 
 export async function GET() {
-  const sb = getSupabase()
-  const { data, error } = await (sb.rpc as Function)('get_whatsif_curve', { p_months: 36 })
+  const { data, error } = await callRpc<Pt>('get_whatsif_curve', { p_months: 36 })
 
   const hasEnoughData = !error && Array.isArray(data) && data.length >= 5
   if (!hasEnoughData) return NextResponse.json(buildFallbackCurve())
 
-  const pts = (data as Pt[])
+  const pts = data
     .map(r => ({ temp: r.temp, demand: r.demand }))
     .sort((a, b) => a.temp - b.temp)
 

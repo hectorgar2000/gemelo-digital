@@ -2,18 +2,28 @@ name: Recolección de datos (cada hora)
 
 on:
   schedule:
-    - cron: '10 * * * *'   # cada hora a los :10 minutos
+    # GitHub retrasa o descarta crons del plan gratuito en horas de carga
+    # (se han visto huecos de 4-8h). Dos disparos por hora en minutos poco
+    # concurridos aumentan la probabilidad de que al menos uno se ejecute.
+    # El colector es idempotente (watermark + upsert), así que ejecutar de más
+    # no duplica datos.
+    - cron: '17 * * * *'
+    - cron: '47 * * * *'
   workflow_dispatch:        # ejecución manual desde GitHub Actions
+
+concurrency:
+  group: hourly-collect
+  cancel-in-progress: false
 
 jobs:
   collect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

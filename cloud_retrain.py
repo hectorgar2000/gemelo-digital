@@ -34,19 +34,15 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "prediction", "prophet_mode
 CHUNK_SIZE = 1000   # max_rows de PostgREST — paginamos en bloques de 1000
 
 
-def paginate(sb, table: str, select: str, since: str) -> list[dict]:
+def paginate(sb, table: str, select: str, since: str, filters: dict | None = None) -> list[dict]:
     """Lee todos los registros de una tabla desde 'since' con paginación."""
     all_rows = []
     offset   = 0
     while True:
-        res = (
-            sb.table(table)
-            .select(select)
-            .gte("ts", since)
-            .order("ts")
-            .range(offset, offset + CHUNK_SIZE - 1)
-            .execute()
-        )
+        q = sb.table(table).select(select).gte("ts", since)
+        for col, val in (filters or {}).items():
+            q = q.eq(col, val)
+        res = q.order("ts").range(offset, offset + CHUNK_SIZE - 1).execute()
         batch = res.data or []
         all_rows.extend(batch)
         log.info(f"  {table}: +{len(batch)} filas (total {len(all_rows)})")
@@ -62,7 +58,10 @@ def load_training_data(sb, months: int) -> pd.DataFrame:
     log.info(f"Cargando datos desde {since[:10]} ({months} meses)...")
 
     weather_rows = paginate(sb, "weather", "ts,temperature_c", since)
-    energy_rows  = paginate(sb, "energy",  "ts,demand_mw",     since)
+    # Solo demanda real: entrenar con el fallback sintético enseñaría al modelo
+    # una curva inventada y degradaría forecast y detección de anomalías.
+    energy_rows  = paginate(sb, "energy",  "ts,demand_mw",     since,
+                            filters={"source": "ree_real"})
     log.info(f"Total: {len(weather_rows)} registros clima, {len(energy_rows)} energía")
 
     df_w = pd.DataFrame(weather_rows)

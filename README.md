@@ -78,11 +78,11 @@ Open-Meteo API          REE API pública
 
 | Workflow | Frecuencia | Qué hace |
 |---|---|---|
-| `hourly_collect.yml` | Cada hora (:10) | Descarga clima y demanda, escribe en Supabase |
+| `hourly_collect.yml` | 2× por hora (:17 y :47) | Descarga clima y demanda, escribe en Supabase (idempotente) |
 | `daily_forecast.yml` | 05:30 UTC | Genera predicción Prophet 36h |
 | `weekly_anomaly.yml` | Lunes 06:00 UTC | Detecta anomalías últimas 2 semanas |
 | `daily_model_eval.yml` | 07:00 UTC | Evalúa MAPE del forecast; alerta si > 10% |
-| `monitor_ingesta.yml` | Cada 3h | Alerta si datos llevan > 5h sin actualizarse |
+| `monitor_ingesta.yml` | Cada 3h | Si los datos llevan > 5h sin actualizarse ejecuta el colector (`--heal`); solo alerta si siguen sin actualizarse |
 | `monthly_retrain.yml` | Día 1 de cada mes | Reentrena Prophet con 12 meses y commitea el pkl |
 
 ---
@@ -187,6 +187,18 @@ Añadir en Settings → Secrets and variables → Actions:
 |---|---|
 | `SUPABASE_URL` | URL del proyecto Supabase |
 | `SUPABASE_SERVICE_KEY` | service_role key (solo server-side, nunca en el cliente) |
+
+---
+
+### Notas sobre los crons de GitHub Actions
+
+GitHub retrasa o descarta ejecuciones programadas del plan gratuito en horas de carga
+(se han observado huecos de 4–8 h en `hourly_collect`). Por eso:
+
+- El colector usa *watermark* + upsert: una ejecución tardía recupera todo el hueco sin duplicar.
+- `hourly_collect` tiene dos disparos por hora en minutos poco concurridos.
+- `monitor_ingesta --heal` ejecuta el colector antes de alertar, así que el email
+  de fallo solo llega cuando la ingesta está realmente rota (REE, Open-Meteo o Supabase).
 
 ---
 

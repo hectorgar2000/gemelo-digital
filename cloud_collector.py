@@ -33,7 +33,25 @@ OVERLAP_HOURS = 2
 MAX_HOURS_BACK = 48
 
 
-def _hours_to_fetch(table: str) -> int:
+def _last_ts(table: str, source: str | None = None) -> datetime | None:
+    """
+    Devuelve el MAX(ts) de 'table' en Supabase (opcionalmente filtrando por
+    columna 'source'), o None si esta vacia o la consulta falla.
+    """
+    try:
+        client = _get_client()
+        q = client.table(table).select('ts')
+        if source:
+            q = q.eq('source', source)
+        res = q.order('ts', desc=True).limit(1).execute()
+        if res.data:
+            return datetime.fromisoformat(res.data[0]['ts'].replace('Z', '+00:00'))
+    except Exception as e:
+        print(f"  [watermark] No se pudo leer ultimo ts de '{table}': {e}", file=sys.stderr)
+    return None
+
+
+def _hours_to_fetch(table: str, source: str | None = None) -> int:
     """
     Calcula cuantas horas pedir para no dejar ningun hueco en 'table'.
 
@@ -45,17 +63,11 @@ def _hours_to_fetch(table: str) -> int:
     Si la tabla esta vacia o la consulta falla, devuelve MAX_HOURS_BACK
     para hacer un llenado inicial completo.
     """
-    try:
-        client = _get_client()
-        res = client.table(table).select('ts').order('ts', desc=True).limit(1).execute()
-        if res.data:
-            last_ts = datetime.fromisoformat(res.data[0]['ts'].replace('Z', '+00:00'))
-            gap_h   = (datetime.now(timezone.utc) - last_ts).total_seconds() / 3600
-            hours   = int(gap_h) + OVERLAP_HOURS + 1
-            return min(hours, MAX_HOURS_BACK)
-    except Exception as e:
-        print(f"  [watermark] No se pudo leer ultimo ts de '{table}': {e}", file=sys.stderr)
-    return MAX_HOURS_BACK
+    last = _last_ts(table, source)
+    if last is None:
+        return MAX_HOURS_BACK
+    gap_h = (datetime.now(timezone.utc) - last).total_seconds() / 3600
+    return max(1, min(int(gap_h) + OVERLAP_HOURS + 1, MAX_HOURS_BACK))
 
 
 def _log_rejections(label: str, rejected: list[str]) -> None:
@@ -88,14 +100,26 @@ def _collect_weather() -> None:
 
 def _collect_energy() -> None:
     """Obtiene, valida y guarda datos de demanda usando la estrategia watermark."""
-    hours = _hours_to_fetch('energy')
+    # Watermark sobre el ultimo dato REAL: si hubo horas rellenadas con
+    # sintetico, se vuelven a pedir a REE y se sustituyen por datos reales.
+    hours = _hours_to_fetch('energy', source='ree_real')
     print(f"[ENERGIA] Solicitando {hours}h (ultimo dato + {OVERLAP_HOURS}h overlap)")
 
-    records = fetch_demand(hours_back=hours)
+    records = fetch_demand(hours_back=hours, allow_synthetic=False)
     source  = "ree_real"
     if not records:
-        records = fetch_demand_synthetic(hours_back=hours)
-        source  = "synthetic"
+        # REE no disponible: rellenar SOLO las horas posteriores al ultimo dato
+        # guardado. Asi el sintetico nunca sobrescribe demanda real, y cuando
+        # REE vuelva el siguiente ciclo reemplazara el sintetico (upsert por ts).
+        print("[ENERGIA] REE no disponible — usando sintetico solo para horas sin datos",
+              file=sys.stderr)
+        last = _last_ts('energy')
+        records = [
+            r for r in fetch_demand_synthetic(hours_back=hours)
+            if last is None
+            or datetime.fromisoformat(r['timestamp'].replace('Z', '+00:00')) > last
+        ]
+        source = "synthetic"
 
     records, rejected = filter_energy(records)
     _log_rejections("ENERGIA", rejected)

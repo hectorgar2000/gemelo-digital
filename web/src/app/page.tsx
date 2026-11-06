@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 import { KpiCard }       from '@/components/KpiCard'
 import { DemandChart }   from '@/components/DemandChart'
 import { ForecastChart } from '@/components/ForecastChart'
@@ -16,21 +17,12 @@ type KPI = {
 }
 
 export default function Dashboard() {
-  const [kpi,        setKpi]        = useState<KPI>({})
-  const [updated,    setUpdated]    = useState<Date | null>(null)
-  const [kpiLoading, setKpiLoading] = useState(true)
-  const [kpiError,   setKpiError]   = useState(false)
+  const {
+    data: kpi, error: kpiError, firstLoad: kpiLoading, updatedAt: updated, reload: fetchKpi,
+  } = useApi<KPI>('kpi', signal => fetchJson<KPI>('/api/kpi', signal), {})
 
-  const fetchKpi = useCallback(() => {
-    setKpiError(false)
-    fetch('/api/kpi')
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setKpi(d); setUpdated(new Date()); setKpiLoading(false) })
-      .catch(() => { setKpiError(true); setKpiLoading(false) })
-  }, [])
-
+  // Refresco automático cada minuto (mantiene los KPIs anteriores mientras carga)
   useEffect(() => {
-    fetchKpi()
     const id = setInterval(fetchKpi, 60_000)
     return () => clearInterval(id)
   }, [fetchKpi])

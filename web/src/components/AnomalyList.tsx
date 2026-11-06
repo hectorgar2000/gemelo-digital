@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ErrorState, Skeleton } from '@/components/ui'
@@ -23,21 +24,12 @@ function AnomalySkeleton() {
 }
 
 export function AnomalyList() {
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([])
-  const [range,     setRange]     = useState('-30d')
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(false)
-
-  const fetchData = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    fetch(`/api/anomalies?range=${range}`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setAnomalies(d); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [range])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const [range, setRange] = useState('-30d')
+  const { data: anomalies, loading, error, reload: fetchData } = useApi<Anomaly[]>(
+    range,
+    signal => fetchJson<Anomaly[]>(`/api/anomalies?range=${range}`, signal),
+    [],
+  )
 
   const alta  = anomalies.filter(a => a.nivel === 'alta').length
   const media = anomalies.filter(a => a.nivel === 'media').length

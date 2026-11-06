@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 import { ChartSkeleton, ErrorState } from '@/components/ui'
 
 type Cell = { week: number; hour: number; demand: number }
@@ -21,21 +22,12 @@ function demandColor(demand: number, min: number, max: number) {
 export function HeatmapGrid() {
   const currentYear = new Date().getFullYear()
   const [year,   setYear]   = useState(currentYear - 1)
-  const [cells,   setCells]   = useState<Cell[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(false)
   const [tooltip, setTooltip] = useState<{ week: number; hour: number; demand: number } | null>(null)
-
-  const fetchData = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    fetch(`/api/heatmap?year=${year}`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setCells(d); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [year])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const { data: cells, loading, error, reload: fetchData } = useApi<Cell[]>(
+    String(year),
+    signal => fetchJson<Cell[]>(`/api/heatmap?year=${year}`, signal),
+    [],
+  )
 
   const demands = cells.map(c => c.demand).filter(Boolean)
   // Percentil p5-p95 para que picos puntuales de invierno/verano no desplacen toda la escala

@@ -45,7 +45,7 @@ function maybeCleanup() {
   }
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   // Solo aplicar a las API routes
   if (!req.nextUrl.pathname.startsWith('/api')) return NextResponse.next()
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useApi } from '@/lib/useApi'
 import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend,
@@ -52,25 +53,20 @@ function CustomTooltip({
 
 export function DemandChart() {
   const [range,        setRange]        = useState(RANGES[0])
-  const [data,         setData]         = useState<Point[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [error,        setError]        = useState(false)
-  const [hasSynthetic, setHasSynthetic] = useState(false)
-
-  const fetchData = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    fetch(`/api/series?range=${range.range}&window=${range.window}`)
-      .then(r => {
-        if (!r.ok) throw new Error()
-        setHasSynthetic(r.headers.get('X-Has-Synthetic') === '1')
-        return r.json()
-      })
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [range])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const { data: result, loading, error, reload: fetchData } = useApi<{ points: Point[]; hasSynthetic: boolean }>(
+    `${range.range}|${range.window}`,
+    async signal => {
+      const r = await fetch(`/api/series?range=${range.range}&window=${range.window}`, { signal })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return {
+        points:       await r.json() as Point[],
+        hasSynthetic: r.headers.get('X-Has-Synthetic') === '1',
+      }
+    },
+    { points: [], hasSynthetic: false },
+  )
+  const data         = result.points
+  const hasSynthetic = result.hasSynthetic
 
   return (
     <div className="bg-gray-900 rounded-2xl p-5 shadow-lg">

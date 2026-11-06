@@ -86,11 +86,13 @@ def load_data_from_supabase(hours: int = 168) -> pd.DataFrame:
         .order("ts")
         .execute()
     )
-    # Cargar energía
+    # Cargar energía (solo real: el sintético no debe marcarse como anomalía
+    # ni contaminar la estadística de residuos)
     res_e = (
         sb.from_("energy")
         .select("ts,demand_mw")
         .gte("ts", since)
+        .eq("source", "ree_real")
         .order("ts")
         .execute()
     )

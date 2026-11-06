@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { callRpc, getSupabase } from '@/lib/supabase'
 
 // Lee searchParams → siempre dinámico; revalidate sería ignorado por Next.js
 export const dynamic = 'force-dynamic'
@@ -22,26 +22,27 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabase()
 
-  // Serie temporal principal via función SQL
-  const { data, error } = await (sb.rpc as Function)('get_series', {
-    p_hours:          hours,
-    p_bucket_minutes: minutes,
-  }).range(0, 19999)
+  type SeriesRow = { ts: string; temperature: number | null; demand: number | null }
 
+  // Serie temporal (función SQL) + detección de datos sintéticos en paralelo.
+  // F3: source='synthetic' significa que la API REE no estaba disponible y se
+  // usó el fallback; el HEAD con count no descarga filas.
+  const [series, synth] = await Promise.all([
+    callRpc<SeriesRow>('get_series', { p_hours: hours, p_bucket_minutes: minutes }, [0, 19999]),
+    sb.from('energy')
+      .select('*', { count: 'exact', head: true })
+      .gte('ts', since)
+      .eq('source', 'synthetic') as unknown as Promise<{ count: number | null }>,
+  ])
+
+  const { data, error } = series
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  // F3: detectar si hay datos sintéticos en el rango (HEAD-only, sin body)
-  // source='synthetic' significa que la API REE no estaba disponible y se usó fallback
-  const { count: synthCount } = await sb
-    .from('energy')
-    .select('*', { count: 'exact', head: true })
-    .gte('ts', since)
-    .eq('source', 'synthetic') as { count: number | null }
+  const synthCount = synth.count
 
   const hasSynthetic = (synthCount ?? 0) > 0
 
   return NextResponse.json(
-    (data as { ts: string; temperature: number | null; demand: number | null }[]).map(r => ({
+    (data ?? []).map(r => ({
       time:        r.ts,
       temperature: r.temperature,
       demand:      r.demand,

@@ -33,3 +33,28 @@ export async function sbQuery<T>(
   const result = await (query as unknown as Promise<{ data: T[] | null }>)
   return result.data ?? []
 }
+
+// ---------------------------------------------------------------------------
+// RPC tipado para las funciones SQL propias (supabase/functions.sql)
+// ---------------------------------------------------------------------------
+// Sin un tipo `Database` generado, supabase-js tipa rpc() con args `undefined`
+// y obligaba a usar `(sb.rpc as Function)(...)`, que desactiva el type-checking.
+// Este helper concentra el cast en un único sitio y devuelve un resultado tipado.
+
+export type RpcResult<T> = { data: T[] | null; error: { message: string } | null }
+
+type RpcBuilder = PromiseLike<RpcResult<unknown>> & {
+  range: (from: number, to: number) => PromiseLike<RpcResult<unknown>>
+}
+type LooseRpc = (fn: string, args?: Record<string, unknown>) => RpcBuilder
+
+export async function callRpc<T>(
+  fn: string,
+  args: Record<string, unknown>,
+  range?: [number, number],
+): Promise<RpcResult<T>> {
+  const sb  = getSupabase()
+  const rpc = sb.rpc.bind(sb) as unknown as LooseRpc
+  const q   = rpc(fn, args)
+  return (await (range ? q.range(range[0], range[1]) : q)) as RpcResult<T>
+}

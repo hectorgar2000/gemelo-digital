@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 
 /** Etiqueta del efecto térmico según la temperatura seleccionada. */
 function thermalLabel(temp: number): string {
@@ -36,21 +37,12 @@ function WhatIfSkeleton() {
 }
 
 export function WhatIfSimulator() {
-  const [curve,   setCurve]   = useState<Curve[]>([])
-  const [temp,    setTemp]    = useState(20)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(false)
-
-  const fetchData = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    fetch('/api/whatsif')
-      .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setCurve(d); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const [temp, setTemp] = useState(20)
+  const { data: curve, loading, error, reload: fetchData } = useApi<Curve[]>(
+    'whatsif',
+    signal => fetchJson<Curve[]>('/api/whatsif', signal),
+    [],
+  )
 
   const bandTemp  = Math.floor(temp / 2) * 2
   const predicted = curve.find(c => c.temp === bandTemp)?.demand ?? null

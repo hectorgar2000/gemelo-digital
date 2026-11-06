@@ -9,6 +9,7 @@ para acceder a más indicadores (precio, generación por tecnología, etc.)
 """
 
 import os
+import re
 import httpx
 from datetime import datetime, timedelta, timezone, date
 from zoneinfo import ZoneInfo
@@ -25,10 +26,26 @@ MADRID_TZ   = ZoneInfo("Europe/Madrid")
 
 
 def _parse_ree_datetime(dt_str: str) -> datetime:
-    """Parsea el formato REE '2025-05-01T00:00:00.000+02:00' a UTC aware."""
-    # Python no soporta milisegundos + offset directamente, limpiamos
-    clean = dt_str[:19] + dt_str[23:]   # quita los milisegundos
-    return datetime.fromisoformat(clean).astimezone(timezone.utc)
+    """
+    Parsea el formato REE '2025-05-01T00:00:00.000+02:00' a UTC aware.
+    Tolera la ausencia de milisegundos y el sufijo 'Z'.
+    """
+    clean = re.sub(r"\.\d+", "", dt_str.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(clean)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=MADRID_TZ)
+    return dt.astimezone(timezone.utc)
+
+
+def _to_madrid_str(dt: datetime) -> str:
+    """
+    Formatea un datetime como 'YYYY-MM-DDTHH:MM' en hora local Madrid.
+    La API de REE interpreta start_date/end_date como hora peninsular, así que
+    pasarle hora UTC recorta la ventana 1h (invierno) o 2h (verano).
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(MADRID_TZ).strftime("%Y-%m-%dT%H:%M")
 
 
 def fetch_demand_real(start_date: str, end_date: str) -> list[dict]:
@@ -99,34 +116,40 @@ def fetch_demand_real_range(
         chunk_end = min(cursor + timedelta(days=chunk_days), end)
         try:
             chunk = fetch_demand_real(
-                cursor.strftime("%Y-%m-%dT%H:%M"),
-                chunk_end.strftime("%Y-%m-%dT%H:%M"),
+                _to_madrid_str(cursor),
+                _to_madrid_str(chunk_end),
             )
             records.extend(chunk)
             print(f"  REE [{cursor.date()} -> {chunk_end.date()}]: {len(chunk)} registros")
         except Exception as e:
             print(f"  REE error [{cursor.date()}]: {e}")
-        # Avanzar al inicio del día siguiente al chunk_end para evitar solapamientos
-        cursor = (chunk_end + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Continuar exactamente donde terminó el bloque. Antes se saltaba al
+        # día siguiente de chunk_end, perdiendo un día completo entre bloques.
+        # El posible solape en el borde lo absorbe el upsert idempotente.
+        cursor = chunk_end
     return records
 
 
-def fetch_demand(hours_back: int = 24) -> list[dict]:
+def fetch_demand(hours_back: int = 24, allow_synthetic: bool = True) -> list[dict]:
     """
     Wrapper principal: usa la API pública REE.
-    Fallback a sintético si la API falla.
+
+    Si allow_synthetic=True (comportamiento histórico, usado por collector.py)
+    cae a datos sintéticos cuando la API falla. Con allow_synthetic=False
+    devuelve [] para que el llamador decida y pueda etiquetar la fuente
+    correctamente.
     """
     now   = datetime.now(timezone.utc)
     start = now - timedelta(hours=hours_back)
     try:
-        records = fetch_demand_real(
-            start.strftime("%Y-%m-%dT%H:%M"),
-            now.strftime("%Y-%m-%dT%H:%M"),
-        )
+        records = fetch_demand_real(_to_madrid_str(start), _to_madrid_str(now))
         if records:
             return records
     except Exception as e:
-        print(f"[REE] API pública falló: {e} — usando sintético")
+        print(f"[REE] API pública falló: {e}")
+    if not allow_synthetic:
+        return []
+    print("[REE] usando demanda sintética como fallback")
     return fetch_demand_synthetic(hours_back)
 
 

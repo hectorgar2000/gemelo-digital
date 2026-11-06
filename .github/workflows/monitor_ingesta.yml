@@ -2,29 +2,36 @@ name: Monitor de ingesta
 
 on:
   schedule:
-    - cron: '0 */3 * * *'   # cada 3 horas
+    - cron: '35 */3 * * *'   # cada 3 horas (minuto :35, menos concurrido que :00)
   workflow_dispatch:
+
+concurrency:
+  group: monitor-ingesta
+  cancel-in-progress: true
 
 jobs:
   monitor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install --quiet "supabase>=2,<3" python-dotenv
+        # httpx es necesario para el modo --heal (ejecuta cloud_collector)
+        run: pip install --quiet httpx "supabase>=2,<3" python-dotenv
 
       - name: Verificar frescura de datos
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python monitor_ingesta.py --max-gap 5
-        # Umbral 5h: el collector corre cada 1h pero GitHub Actions free tier
-        # puede retrasarse 1-3h, así que 5h evita falsos positivos.
-        # Si el script sale con exit 1, GitHub envía email de alerta al propietario.
+        run: python monitor_ingesta.py --max-gap 5 --heal
+        # Si los datos superan 5h de antigüedad (típico cuando GitHub descarta
+        # ejecuciones del cron horario), --heal ejecuta el colector aquí mismo
+        # y vuelve a comprobar. Solo sale con exit 1 —y GitHub envía el email
+        # de alerta— si tras recuperar los datos siguen desactualizados, es
+        # decir, si la ingesta está realmente rota (REE/Open-Meteo/Supabase).

@@ -10,15 +10,15 @@ permissions:
 
 jobs:
   retrain:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45     # el entrenamiento con 12 meses tarda ~15-20 min
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0    # necesario para poder hacer push después
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

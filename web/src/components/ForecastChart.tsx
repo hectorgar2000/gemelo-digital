@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { useApi, fetchJson } from '@/lib/useApi'
 import {
   ResponsiveContainer, ComposedChart, Line, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
@@ -13,23 +14,14 @@ type DPoint  = { time: string; demand: number | null }
 type MPoint  = { time: string; real: number | null; pred: number | null; upper: number | null; lower: number | null }
 
 export function ForecastChart() {
-  const [forecast, setForecast] = useState<FPoint[]>([])
-  const [real,     setReal]     = useState<DPoint[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(false)
-
-  const fetchData = useCallback(() => {
-    setLoading(true)
-    setError(false)
-    Promise.all([
-      fetch('/api/forecast').then(r => { if (!r.ok) throw new Error(); return r.json() }),
-      fetch('/api/series?range=-48h&window=1h').then(r => { if (!r.ok) throw new Error(); return r.json() }),
-    ])
-      .then(([fc, sr]) => { setForecast(fc); setReal(sr); setLoading(false) })
-      .catch(() => { setError(true); setLoading(false) })
-  }, [])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const { data: [forecast, real], loading, error, reload: fetchData } = useApi<[FPoint[], DPoint[]]>(
+    'forecast',
+    signal => Promise.all([
+      fetchJson<FPoint[]>('/api/forecast', signal),
+      fetchJson<DPoint[]>('/api/series?range=-48h&window=1h', signal),
+    ]),
+    [[], []],
+  )
 
   // "Ahora" actualizado cada minuto para que la línea de referencia no quede estática
   const [now, setNow] = useState(() => new Date().toISOString())
